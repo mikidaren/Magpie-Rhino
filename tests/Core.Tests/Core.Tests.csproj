@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/RhinoMagpie/BridgeConfig.cs" Link="BridgeConfig.cs" />
+    <Compile Include="../../src/RhinoMagpie/ClaudeLocator.cs" Link="ClaudeLocator.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,16 @@
+name: rhino-magpie
+version: 0.2.0
+authors:
+  - mikidaren
+description: >
+  Magpie AI modeling panel for Rhino 9 on Windows. Connects to your local Magpie
+  gateway with model groups and routing strategies, and uses Rhino's built-in
+  MCP tools to inspect and edit geometry. Includes per-document conversations,
+  tool approvals, viewport image feedback and cancellation.
+url: "https://github.com/mikidaren/rhino9-magpie"
+keywords:
+  - ai
+  - magpie
+  - mcp
+  - modeling
+  - architecture

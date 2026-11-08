@@ -23,6 +23,7 @@ jobs:
           dotnet-version: '8.0.x'
       - run: node --test tests/agent.test.mjs
       - run: dotnet run --project tests/Core.Tests --configuration Release
+      - run: dotnet run --project tests/Agent.Tests --configuration Release
       - if: runner.os == 'Windows'
         shell: pwsh
         run: ./tests/install.test.ps1
@@ -35,19 +36,16 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - run: dotnet publish src/RhinoMagpie -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o dist/launcher
       - shell: pwsh
         run: |
-          Copy-Item scripts/install.ps1 dist/launcher/install.ps1
-          Copy-Item README.md dist/launcher/README.md
-          Copy-Item plugin dist/launcher/plugin -Recurse
-          Compress-Archive -Path dist/launcher/RhinoMagpie.exe,dist/launcher/install.ps1,dist/launcher/README.md,dist/launcher/plugin -DestinationPath dist/RhinoMagpie-win-x64.zip
-          Get-FileHash dist/RhinoMagpie-win-x64.zip -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  RhinoMagpie-win-x64.zip" } | Set-Content dist/SHA256SUMS.txt
+          Invoke-WebRequest https://files.mcneel.com/yak/tools/0.19.1/win-x64/yak.exe -OutFile "$env:RUNNER_TEMP/yak.exe"
+          ./scripts/build-panel.ps1 -YakPath "$env:RUNNER_TEMP/yak.exe"
       - uses: actions/upload-artifact@v4
         with:
-          name: RhinoMagpie-win-x64
+          name: RhinoMagpie-panel-win-x64
           path: |
-            dist/RhinoMagpie-win-x64.zip
+            dist/RhinoMagpie-panel-win-x64.zip
+            dist/*.yak
             dist/SHA256SUMS.txt
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -58,7 +56,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: RhinoMagpie-win-x64
+          name: RhinoMagpie-panel-win-x64
           path: dist
       - name: Publish release
         env:

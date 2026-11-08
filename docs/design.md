@@ -1,5 +1,8 @@
 # Rhino 9 AI → Magpie
 
+This records the historical v0.1 launcher decision. The current v0.2 design is
+`superpowers/specs/2026-11-08-native-magpie-design.md`.
+
 The user requested a working connection from the installed Rhino 9 AI panel to
 Magpie, a new GitHub repository with automatic builds, and submission to the
 Magpie community market.

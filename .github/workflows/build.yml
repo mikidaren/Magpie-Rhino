@@ -24,10 +24,11 @@ jobs:
       - run: node --test tests/agent.test.mjs
       - run: dotnet run --project tests/Core.Tests --configuration Release
       - run: dotnet run --project tests/Agent.Tests --configuration Release
+      - run: dotnet run --project tests/Workflow.Tests --configuration Release
       - if: runner.os == 'Windows'
         shell: pwsh
         run: ./tests/install.test.ps1
-      - run: npm pack ./plugin --dry-run
+      - run: npm pack ./Magpie-Rhino --dry-run
   package:
     needs: test
     runs-on: windows-latest
@@ -42,10 +43,11 @@ jobs:
           ./scripts/build-panel.ps1 -YakPath "$env:RUNNER_TEMP/yak.exe"
       - uses: actions/upload-artifact@v4
         with:
-          name: RhinoMagpie-panel-win-x64
+          name: Magpie-Rhino-win-x64
           path: |
-            dist/RhinoMagpie-panel-win-x64.zip
-            dist/*.yak
+            dist/Magpie-Rhino-win-x64.zip
+            dist/Magpie-Rhino-native-agents.png
+            dist/rhino-magpie-*.yak
             dist/SHA256SUMS.txt
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -54,13 +56,19 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: RhinoMagpie-panel-win-x64
+          name: Magpie-Rhino-win-x64
           path: dist
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
-        run: gh release create "$RELEASE_TAG" dist/* --title "$RELEASE_TAG" --generate-notes
+        run: |
+          if [ -f "docs/release-$RELEASE_TAG.md" ]; then
+            gh release create "$RELEASE_TAG" dist/* --title "Magpie-Rhino $RELEASE_TAG" --notes-file "docs/release-$RELEASE_TAG.md"
+          else
+            gh release create "$RELEASE_TAG" dist/* --title "Magpie-Rhino $RELEASE_TAG" --generate-notes
+          fi

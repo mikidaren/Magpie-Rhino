@@ -122,6 +122,122 @@ for (int attempt = 0; attempt < 2; attempt++)
     }
 }
 Check(brokenHandler.ChatRequests.Count == 1, "blocked session cannot dispatch a retry or another model request");
+
+foreach (string failure in new[] { "invalid-json", "wrong-id", "http-error" })
+{
+    var protocolHandler = new FixtureHandler { ToolFailure = failure };
+    using var protocolHttp = new HttpClient(protocolHandler);
+    var protocolSession = new ModelingSession();
+    try
+    {
+        await protocolSession.RunAsync("Build", fixtureConfig, new MagpieGateway(protocolHttp),
+            new RhinoMcpClient(protocolHttp, new Uri("http://localhost:10500/agent")),
+            (_, _) => Task.FromResult(true), (_, _) => Task.FromResult(""), (_, _) => { }, CancellationToken.None);
+        throw new Exception("Unknown MCP result was ignored");
+    }
+    catch (UnconfirmedToolException)
+    {
+        Check(protocolSession.ToolCompletionUnknown && protocolHandler.Executed.Count == 1,
+            failure + " blocks further tools when completion is unknown");
+    }
+}
+
+var refusedHandler = new FixtureHandler { ToolFailure = "rpc-error" };
+using var refusedHttp = new HttpClient(refusedHandler);
+var refusedSession = new ModelingSession();
+await refusedSession.RunAsync("Inspect", fixtureConfig, new MagpieGateway(refusedHttp),
+    new RhinoMcpClient(refusedHttp, new Uri("http://localhost:10500/agent")),
+    (_, _) => Task.FromResult(true), (_, _) => Task.FromResult(""), (_, _) => { }, CancellationToken.None);
+Check(!refusedSession.ToolCompletionUnknown && refusedSession.Outcome == "paused" &&
+    refusedHandler.ChatRequests.Count is >= 2 and <= 5,
+    "explicit MCP refusal is known, explained and kept paused until the failed change is repaired");
+
+var blockHandler = new FixtureHandler
+{
+    FirstMessage = JsonNode.Parse("""{"role":"assistant","content":[{"type":"text","text":"可读的回答"}]}""")!.AsObject(),
+};
+using var blockHttp = new HttpClient(blockHandler);
+var blockMessage = await new MagpieGateway(blockHttp).CompleteAsync(fixtureConfig, [], [], CancellationToken.None);
+Check(blockMessage["content"]!.GetValue<string>() == "可读的回答", "text content blocks display as readable model output");
+
+foreach (string invalid in new[]
+{
+    """{"role":"assistant","content":null,"tool_calls":[{"id":"same","function":{"name":"run_python","arguments":"{}"}},{"id":"same","function":{"name":"run_python","arguments":"{}"}}]}""",
+    """{"role":"assistant","content":null,"tool_calls":[{"function":{"name":"run_python","arguments":"{}"}}]}""",
+    """{"role":"assistant","content":null,"tool_calls":{"id":"bad"}}""",
+    """{"role":"assistant","content":""}""",
+})
+{
+    var invalidHandler = new FixtureHandler { FirstMessage = JsonNode.Parse(invalid)!.AsObject() };
+    using var invalidHttp = new HttpClient(invalidHandler);
+    var invalidSession = new ModelingSession();
+    try
+    {
+        await invalidSession.RunAsync("Build", fixtureConfig, new MagpieGateway(invalidHttp),
+            new RhinoMcpClient(invalidHttp, new Uri("http://localhost:10500/agent")),
+            (_, _) => Task.FromResult(true), (_, _) => Task.FromResult(""), (_, _) => { }, CancellationToken.None);
+        throw new Exception("Malformed model response was accepted");
+    }
+    catch (InvalidOperationException)
+    {
+        Check(invalidHandler.Executed.Count == 0, "invalid model response cannot execute geometry tools");
+    }
+    invalidHandler.FinalOnly = true;
+    await invalidSession.RunAsync("Try again", fixtureConfig, new MagpieGateway(invalidHttp),
+        new RhinoMcpClient(invalidHttp, new Uri("http://localhost:10500/agent")),
+        (_, _) => Task.FromResult(true), (_, _) => Task.FromResult(""), (_, _) => { }, CancellationToken.None);
+    Check(invalidHandler.ChatRequests.Last()["messages"]!.AsArray().All(message =>
+        message?["role"]?.GetValue<string>() != "assistant" || message["tool_calls"] is null),
+        "rejected response does not poison the next conversation turn");
+}
+
+var questions = UserQuestion.Parse(JsonNode.Parse("""
+    {"questions":[
+      {"question":"选择屋顶","options":["平屋顶","坡屋顶","平屋顶"]},
+      {"question":"选择材料","options":["木材","钢材"],"multiSelect":true}
+    ]}
+    """)!.AsObject());
+Check(questions.Count == 2 && questions[0].Options.Count == 2 && !questions[0].AllowMultiple &&
+    questions[1].AllowMultiple, "user questions preserve readable choices and multiple-selection behavior");
+try
+{
+    UserQuestion.Parse(JsonNode.Parse("""{"questions":[{"question":"材料","options":[" "]}]}""")!.AsObject());
+    throw new Exception("Blank choices accepted");
+}
+catch (InvalidOperationException) { Check(true, "empty question choices are rejected before opening a dialog"); }
+
+string freshProfile = Path.Combine(Path.GetTempPath(), "rhinomagpie-install-" + Guid.NewGuid().ToString("N"));
+try
+{
+    string directory = MagpieGateway.EnsureConfigurationDirectory(freshProfile);
+    Check(Directory.Exists(directory) && directory == Path.Combine(freshProfile, ".config", "rhino9-magpie"),
+        "fresh plugin startup creates the Magpie detection directory without an installer script");
+    Check(Directory.GetFiles(directory).Length == 0, "startup creates no credential or placeholder config");
+    string settings = Path.Combine(directory, "settings.json");
+    File.WriteAllText(settings, """{"model":"group/existing","apiKey":"fixture-private","keep":{"setting":1}}""");
+    MagpieGateway.EnsureConfigurationDirectory(freshProfile);
+    Check(File.ReadAllText(settings).Contains("fixture-private") &&
+        File.ReadAllText(settings).Contains("\"keep\""), "repeated startup preserves existing connection settings");
+}
+finally
+{
+    if (Directory.Exists(freshProfile)) Directory.Delete(freshProfile, true);
+}
+var failureLedger = new ProjectWorkflow();
+failureLedger.SetBasis(new JsonObject { ["source"] = "user_dimensions", ["note"] = "12m x 8m" },
+    new ModelingRunOptions(ExplicitScale: true));
+failureLedger.ObserveTool("run_csharp", false, false);
+failureLedger.ObserveTool("set_layer_material", false, true);
+failureLedger.ObserveTool("list_objects", true, true);
+bool maskedFailureRejected = false;
+try
+{
+    failureLedger.UpdatePlan(JsonNode.Parse("""
+        {"goal":"Facade","steps":[{"id":"facade","title":"Openings","acceptance":"Openings verified","status":"complete"}]}
+        """)!.AsObject());
+}
+catch (InvalidOperationException) { maskedFailureRejected = true; }
+Check(maskedFailureRejected, "unrelated material success cannot mask a failed geometry operation");
 Console.WriteLine($"{passed} agent checks passed");
 
 sealed class FixtureHandler : HttpMessageHandler
@@ -134,6 +250,8 @@ sealed class FixtureHandler : HttpMessageHandler
     public bool FailGateway { get; set; }
     public bool FailTool { get; set; }
     public Action? AfterTool { get; set; }
+    public string? ToolFailure { get; set; }
+    public JsonObject? FirstMessage { get; set; }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
     {
@@ -145,7 +263,9 @@ sealed class FixtureHandler : HttpMessageHandler
             ChatRequests.Add(body);
             if (FailGateway)
                 return new HttpResponseMessage(HttpStatusCode.Unauthorized) { Content = new StringContent("fixture-secret") };
-            JsonObject message = ChatRequests.Count > 1 || FinalOnly
+            JsonObject message = ChatRequests.Count == 1 && FirstMessage is not null
+                ? FirstMessage.DeepClone().AsObject()
+                : ChatRequests.Count > 1 || FinalOnly
                 ? new() { ["role"] = "assistant", ["content"] = "Verified." }
                 : JsonNode.Parse("""
                 {"role":"assistant","content":null,"tool_calls":[
@@ -180,6 +300,18 @@ sealed class FixtureHandler : HttpMessageHandler
             string name = body["params"]!["name"]!.GetValue<string>();
             Executed.Add(name);
             if (FailTool) throw new HttpRequestException("Fixture connection lost after dispatch.");
+            if (ToolFailure == "invalid-json")
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{invalid") };
+            if (ToolFailure == "wrong-id")
+                return Response(new JsonObject { ["id"] = 999999, ["result"] = new JsonObject() });
+            if (ToolFailure == "http-error")
+                return new HttpResponseMessage(HttpStatusCode.BadGateway);
+            if (ToolFailure == "rpc-error")
+                return Response(new JsonObject
+                {
+                    ["id"] = body["id"]!.DeepClone(),
+                    ["error"] = new JsonObject { ["code"] = -32602, ["message"] = "Refused before execution" },
+                });
             AfterTool?.Invoke();
             result = new JsonObject
             {

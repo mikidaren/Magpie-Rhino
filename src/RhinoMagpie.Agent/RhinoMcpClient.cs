@@ -3,6 +3,8 @@ using System.Text.Json.Nodes;
 
 namespace RhinoMagpie.Agent;
 
+public sealed class McpRpcException() : Exception("Rhino MCP 拒绝了调用，请检查 Rhino 命令历史。");
+
 public sealed class RhinoMcpClient(HttpClient client, Uri endpoint)
 {
     private long requestId;
@@ -14,7 +16,7 @@ public sealed class RhinoMcpClient(HttpClient client, Uri endpoint)
         {
             ["protocolVersion"] = "2025-03-26",
             ["capabilities"] = new JsonObject(),
-            ["clientInfo"] = new JsonObject { ["name"] = "RhinoMagpie", ["version"] = "0.2.0" },
+            ["clientInfo"] = new JsonObject { ["name"] = "RhinoMagpie", ["version"] = MagpieGateway.Version },
         }, token);
         using var notification = CreateRequest(new JsonObject
         {
@@ -82,10 +84,10 @@ public sealed class RhinoMcpClient(HttpClient client, Uri endpoint)
             }
         }
         else body = JsonNode.Parse(text)?.AsObject();
-        if (body?["error"] is not null)
-            throw new InvalidOperationException("Rhino MCP 返回协议错误。请检查 Rhino 命令历史。");
-        if (body?["id"]?.ToString() != id.ToString())
+        if (body is null || body["id"]?.ToString() != id.ToString())
             throw new InvalidOperationException("Rhino MCP 响应编号不匹配。");
+        if (body["error"] is not null)
+            throw new McpRpcException();
         return body["result"]?.AsObject() ?? throw new InvalidOperationException("Rhino MCP 响应无效。");
     }
 }

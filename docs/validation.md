@@ -1,5 +1,142 @@
 # Validation
 
+## Version 0.3.1 Magpie-Rhino release
+
+Verified on November 9, 2026, with installed Magpie 0.1.3323 and Rhino 9
+9.0.26300.09401 on Windows x64.
+
+- Product, marketplace registry name, Agent display name, Rhino metadata and
+  companion folder are named **Magpie-Rhino**. Existing `rhino9-ai` and
+  `rhino-magpie` technical IDs are retained for connection and Yak compatibility.
+- A new Rhino process loaded package 0.3.1 at startup. Opening only Rhino's normal
+  `AI` panel displayed **Claude**, **Codex** and **Magpie** in the same native
+  agent menu. No `Magpie` command was issued.
+- Clicking the injected Magpie row after the native undo record completed
+  opened the hosted Magpie panel. The return action restored the original native
+  WebView and its agents. A click during undo recording did not switch.
+- A request through the hosted panel called `get_context` and returned
+  `NATIVE_AI_MAGPIE_OK` with 11 objects. It made no geometry changes.
+- Tests passed: 157 workflow checks, 38 agent checks, 23 legacy core checks,
+  4 standalone descriptor tests, 5 marketplace package tests and registry
+  validation. The isolated installer regression passed.
+- The native entry was also checked in a browser fixture (25 checks) and source
+  checks (9). Independent source/artifact review found no actionable P1/P2 issue.
+- The Release build completed with zero compiler errors or warnings. Yak reports
+  the historical assembly-name/package-name difference as a cosmetic warning.
+
+This remains a compatibility UI extension over the known RhinoAI page structure,
+not a new registered backend runner. Rapid document-close races, other RhinoAI
+UI versions and complex architectural production cases require further testing.
+Public build, release and marketplace acceptance are separate observable states.
+
+## Version 0.3.0 local architectural workspace
+
+Verified locally on November 9, 2026. Publication remains deferred.
+
+- 157 workflow checks and 38 agent checks passed. Coverage includes
+  fragmented streaming text and tool calls, truncation refusal, compiler-error
+  repair, explicit scale approval, preserved pending scope, failed-change
+  readback invalidation, per-reference units and human review. Legacy core checks
+  passed (23), descriptor tests passed (3), and the isolated installer passed.
+- Regression tests reproduced unrelated material success masking a geometry
+  failure before the fix. The operation ledger now retains each failure until
+  explicit resolution links a compatible successful correction, a current-run
+  readback after the latest mutation, and a verification note. Tests reject
+  wrong families, wrong stages, stale and previous-run readbacks, and independent
+  failures left unresolved. Ledger IDs survive native output truncation above 64K.
+- The native plugin builds with zero compiler errors or warnings.
+- Isolated browser checks cover draft/selection/scroll preservation, document
+  identity changes, invalidated width dialogs, delayed Eto bridge injection,
+  persistent plan visibility and safe text rendering.
+- An actual embedded WebView in Rhino reported both `window.eto` and
+  `window.magpie`. Its posted actions changed options and imported the selected
+  synthetic drawing. A native browser capture verified the rendered interface.
+- A synthetic 12 by 8 metre drawing was imported into a millimetre document.
+  These dimensions are test assumptions, with no real project supplied.
+- The architectural session created a plan for scale, structure, cornice detail
+  and final checks. It proceeded beyond the six massing objects to create the
+  four independently required cornices.
+- Independent Rhino readback confirmed ten valid, solid native Breps plus the
+  retained reference curve. All four plan stages were checked. The final state
+  was `awaitingReview=true`, `accepted=false`.
+- Partial assistant text was recorded while the native model request was still
+  running, proving actual streaming delivery rather than a delayed text replay.
+- A live C# test intentionally compiled the user's error types. Rhino returned
+  a compiler failure. The agent corrected `LayerTable.FindName` handling, the
+  reserved `base` parameter and the top-level return, then ran the corrected
+  script and reported `CSHARP_REPAIR_OK` without changing model objects.
+- A repeated live repair test against the ledger build linked failed `op-2`,
+  corrective `op-3` and readback `op-4` through `resolve_modeling_failure`.
+  Independent host inspection confirmed `Outcome=complete` in direct mode and
+  `HasUnresolvedFailures=false`; the document retained 11 objects and millimetres.
+- Native AI compatibility hosting was tested in the installed
+  `Rhino.AI.UI.AIPanel`. The added selector contained **Rhino 内置代理** and
+  **Magpie**. The ordinary `Magpie` command selected the hosted Magpie UI.
+- Switching to native mode restored its original WebView. Switching back reused
+  the Magpie instance. A real request through that hosted UI called `get_context`
+  and replied `NATIVE_AI_MAGPIE_OK` with 11 objects.
+- Importing an image with a mismatched unit token was refused with no geometry
+  changes. Valid import measured 6000 document millimetres in width.
+- Native hosting retains one adapter per panel/document, defers selection beyond
+  the opening command's undo record and restores or disposes the original
+  WebView according to its owner lifetime.
+
+The compatibility selector hosts our agent in the native UI through public Eto
+control APIs. It does not register a fourth RhinoAI backend runner or replace
+RhinoAI files. Compatibility with other RhinoAI UI versions, extensive multi-window
+workflows, persistent project history and complex architectural/Grasshopper
+production cases require further verification.
+
+## Version 0.2.1 local candidate
+
+This candidate remains local pending the user's decision to upload.
+
+- 37 portable agent checks passed, including startup directory creation,
+  settings preservation, malformed model responses, text blocks, MCP transport
+  uncertainty, completed RPC errors and question parsing.
+- Standalone descriptor checks passed, 3 tests. Existing legacy checks passed,
+  23 checks and the isolated installer regression.
+- Community package checks passed, 5 tests, plus registry validation. The local
+  community package has the correct trusted-publishing repository metadata,
+  install command and ordering after the other agents.
+- Native plugin built with zero compiler errors or warnings.
+- Installed the `.yak` directly with Rhino's Yak tool. The existing connection
+  directory was temporarily moved to a verified sibling backup. Ordinary Rhino
+  startup, without the installer script or the Magpie command, created the empty
+  detection directory. The original settings were restored byte-for-byte.
+- The installed plugin reported `LoadTime=AtStartup`, version `0.2.1.0`.
+- Native question dialogs rendered radio buttons and checkboxes, rejected an
+  unanswered submission, returned selected answers and supplementary text, and
+  handled cancellation. Tool confirmation returned false for reject and true
+  for allow.
+- Document draft isolation and automatic-approval reset passed native component
+  checks. Refresh preserved the selected routing group, could be stopped, and
+  restored enabled controls afterward.
+- A real panel session using `group/smart-split` created a temporary test pavilion
+  with six valid closed native Breps. Test assumptions were 6000 by 4000 mm in
+  plan, four 200 by 200 mm columns, and a roof at z=3000 to 3200 mm.
+- The model read back bounding boxes, solidity and volumes, then received a
+  native viewport image and completed its response.
+- A second turn changed only the roof thickness to 300 mm. Independent native
+  readback confirmed the roof's lower face stayed at z=3000 and the other five
+  objects retained their IDs and bounding boxes.
+- A separate isolated panel session created a radius-20 sphere and changed it
+  to radius 30 on its next turn. Two ordinary Rhino `_Undo` commands reverted
+  the edit and then the creation, restoring zero live objects.
+- An earlier test called `doc.Undo()` from inside an MCP C# script and damaged
+  the test undo sequence. The same effect reproduced with ordinary Rhino spheres
+  without the plugin. The final acceptance check uses native Undo commands.
+- Stopping a model request restored controls and closed the turn's undo record.
+  A subsequent read-only panel request succeeded with `RECOVERY_OK`, confirming
+  the panel remained usable.
+- Disposing the panel during a pending refresh completed without closing Rhino
+  or breaking its native MCP listener.
+- Independent read-only review of this candidate found no important or critical
+  defects in the scoped changes.
+
+Grasshopper workflows, very large or long-running modeling tasks and every
+provider combination remain outside this verification.
+
 ## Version 0.2.0 native panel
 
 Verified on November 8, 2026 with Rhino 9 `9.0.26300.09401`, Windows x64 and

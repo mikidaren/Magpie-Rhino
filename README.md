@@ -1,6 +1,10 @@
-# RhinoMagpie
+# Magpie-Rhino
 
-A native **Magpie** modeling panel for **Rhino 9 on Windows**, using your local
+Version 0.3.1 adds Magpie directly to Rhino's native AI agent menu.
+
+![Magpie in the native Rhino AI agent menu](docs/native-ai-menu.png)
+
+A **Magpie** architectural modeling workspace for **Rhino 9 on Windows**, using your local
 Magpie gateway, model groups and routing strategies.
 
 ```text
@@ -11,15 +15,21 @@ The panel supports separate conversations per document, model and group selectio
 tool approvals, cancellation, and viewport image feedback. Magpie owns model
 routing and provider accounts. Rhino's installed AI plugin supplies the MCP tools.
 
+The architectural workspace adds live streaming, a task plan with acceptance
+conditions, drawing references, scale grounding, repair attempts and human review.
+Architectural mode is enabled initially; direct editing remains available in settings.
+
 ## 安装和使用
 
-1. 下载 Release 中的 `RhinoMagpie-panel-win-x64.zip` 并完整解压。
-2. 运行其中的 `install-panel.ps1`，安装 Rhino `.yak` 包，然后重启 Rhino 9。
+1. 下载 Release 中的 `Magpie-Rhino-win-x64.zip` 并完整解压。
+2. 安装其中的 `.yak` 包，或运行 `install-panel.ps1`。然后重启 Rhino 9。
+   插件会在启动时自动创建检测目录，不改写已有模型和连接配置。
 3. 在 Magpie 安装配套连接插件。市场审核期间可使用本机路径安装
-   `magpie plugin add "完整路径/plugin"`。
-4. 在 Magpie 的 Agent 页连接 **Rhino 9 · Magpie**，选择模型、自定义组或策略。
-5. 正常启动 Rhino，在命令行输入 `Magpie` 打开面板。
-6. 输入建模要求，点击发送。支持 `Ctrl+Enter`。默认会在执行修改前显示工具参数供确认。
+   `magpie plugin add "完整路径/Magpie-Rhino"`。
+4. 在 Magpie 的 Agent 页连接 **Magpie-Rhino**，选择模型、自定义组或策略。
+5. 正常打开 Rhino 的 **AI 面板**，在代理菜单选择 **Magpie**，无需输入命令。
+   `MagpieStandalone` 提供独立面板入口。
+6. 输入建模要求，点击发送。`Enter` 发送，`Shift+Enter` 换行。默认会在执行修改前显示工具参数供确认。
 
 面板默认选择 **跟随 Magpie 当前模型 / 自定义组**，每次发送重新读取连接配置。
 点击刷新模型可读取 Magpie 的完整模型及组列表，也可在面板内临时选择。
@@ -28,6 +38,7 @@ routing and provider accounts. Rhino's installed AI plugin supplies the MCP tool
 可主动勾选 **本次会话自动执行修改**。停止后会等待已发出的 Rhino 操作返回，
 再结束本轮，继续之前请检查模型。切换或关闭文档会停止当前回合。
 每轮修改由 Rhino 撤销记录包围，可使用 `Ctrl+Z`。
+刷新模型会保留当前选择，刷新期间也可点击停止。提问窗口支持单选、多选和补充说明。
 
 ## Requirements
 
@@ -36,15 +47,27 @@ routing and provider accounts. Rhino's installed AI plugin supplies the MCP tool
 - A local HTTP Magpie gateway. The connection file must contain a gateway root
   URL without `/v1`.
 
-The plugin opens a separate native dockable panel named **Magpie**. The installed
-RhinoAI agent runner currently supports Claude, Codex and Gemini through an
-internal registry. The independent panel is the accepted integration fallback.
-Its modeling agent runs directly against Magpie.
+The native AI compatibility adapter retains RhinoAI's original WebView and adds
+**Magpie** to its agent menu automatically. Magpie hosts this workspace inside
+the AI panel; returning to native mode restores its original interface and agents.
+The adapter changes the live UI through Eto controls and a bounded page extension.
+It does not replace RhinoAI files or add a formal backend runner to its internal
+registry. It only attaches to the known `Rhino.AI.UI.AIPanel` WebView shape and
+keeps hosts per document. Rhino updates require a compatibility check.
+
+If that UI shape is unavailable, the `Magpie` command falls back to the separate
+panel. `MagpieStandalone` opens that panel explicitly. The modeling agent runs
+directly against Magpie in either host.
 
 The earlier v0.1 launcher remains under `src/RhinoMagpie` as a legacy component.
-Use the v0.2 panel package for the direct integration described here.
+Use the current panel package for the direct integration described here.
 
 ## Configuration and document scope
+
+The product display name is **Magpie-Rhino**, including its marketplace listing,
+Magpie Agent entry, Rhino plugin title and release archive. Technical IDs
+`rhino9-ai` and `rhino-magpie` remain stable for existing settings and Yak upgrades.
+The named `Magpie-Rhino` folder avoids a generic `plugin` label for local installs.
 
 The Magpie descriptor manages only `model`, `baseUrl` and `apiKey` in
 `~/.config/rhino9-magpie/settings.json`. Disconnect in Magpie restores those keys.
@@ -54,6 +77,8 @@ The panel reuses the MCP endpoint belonging to the active document. Listener
 lookup uses a read-only reflection call to the installed RhinoAI host because
 that version exposes no public per-document port API. When unavailable, the
 panel starts a document listener using Rhino's `MCPStart` command.
+That listener remains available until the document or Rhino session closes.
+Other processes on the same computer can use it to run Rhino tools and scripts.
 
 Tool results and conversations stay in memory until the panel closes. Prompts,
 relevant model state and viewport images requested by the agent pass through
@@ -66,6 +91,7 @@ Inspect created geometry and review any script or file-write approval.
 node --test tests/agent.test.mjs
 dotnet run --project tests/Core.Tests -c Release
 dotnet run --project tests/Agent.Tests -c Release
+dotnet run --project tests/Workflow.Tests -c Release
 dotnet build src/RhinoMagpie.Plugin -c Release
 ./scripts/build-panel.ps1 -YakPath "E:/WORK/Rhino9/System/Yak.exe"
 ```
@@ -81,3 +107,10 @@ Rhino PackageManager/Yak and Food4Rhino are separate distribution channels.
 Their actual submission state is recorded in `docs/validation.md`.
 
 MIT. Unofficial community integration by mikidaren.
+
+## Workflow references
+
+The design draws on the user's architectural workflow requirements and Reer's
+public product/tool documentation. `reer-ide/rhino_mcp` has an MIT license; its
+remote-service repository declares proprietary terms. This workspace's UI and
+agent control are our implementation, with no proprietary Reer code included.

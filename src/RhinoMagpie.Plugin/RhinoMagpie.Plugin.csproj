@@ -4,7 +4,10 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>0.2.0</Version>
+    <Version>0.3.1</Version>
+    <Title>Magpie-Rhino</Title>
+    <Product>Magpie-Rhino</Product>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <AssemblyName>RhinoMagpie.Plugin</AssemblyName>
     <TargetExt>.rhp</TargetExt>
     <EnableDynamicLoading>true</EnableDynamicLoading>
@@ -12,5 +15,8 @@
   <ItemGroup>
     <ProjectReference Include="../RhinoMagpie.Agent/RhinoMagpie.Agent.csproj" />
     <PackageReference Include="RhinoCommon" Version="9.0.26132.12305-wip" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Web/panel.html" />
   </ItemGroup>
 </Project>

@@ -7,12 +7,16 @@ if (!$YakPath) {
     $YakPath = Join-Path (Split-Path -Parent $rhinoPath) 'Yak.exe'
 }
 if (!(Test-Path -LiteralPath $YakPath)) { throw 'Rhino 9 Yak.exe was not found. Pass -YakPath with its full path.' }
-$package = Get-ChildItem -LiteralPath $PSScriptRoot -Filter 'rhino-magpie-*.yak' | Select-Object -First 1
-if (!$package) { throw 'Extract the full RhinoMagpie-panel-win-x64.zip before running this installer.' }
+$pluginManifest = Join-Path $PSScriptRoot 'Magpie-Rhino/package.json'
+if (!(Test-Path -LiteralPath $pluginManifest)) { throw 'Extract the full Magpie-Rhino-win-x64.zip before running this installer.' }
+$expectedVersion = (Get-Content -LiteralPath $pluginManifest -Raw | ConvertFrom-Json).version
+if (!$expectedVersion) { throw 'The companion plugin version is missing.' }
+$package = Get-ChildItem -LiteralPath $PSScriptRoot -Filter "rhino-magpie-$expectedVersion-*.yak" | Select-Object -First 1
+if (!$package) { throw 'Extract the full Magpie-Rhino-win-x64.zip before running this installer.' }
 & $YakPath install $package.FullName
 if ($LASTEXITCODE -ne 0) { throw 'Rhino package installation failed.' }
 $configDirectory = Join-Path $env:USERPROFILE '.config/rhino9-magpie'
 New-Item -ItemType Directory -Path $configDirectory -Force | Out-Null
-Write-Output 'RhinoMagpie installed. Restart Rhino 9 and run Magpie to open its panel.'
-Write-Output 'Connect Rhino 9 · Magpie in the Magpie Agents page. Choose a model, custom group or strategy there.'
-Write-Output 'RhinoMagpie 已安装。重启 Rhino 9 后输入 Magpie。请在 Magpie 的 Agent 页连接并选择模型或自定义组。'
+Write-Output 'Magpie-Rhino installed. Restart Rhino 9, open its AI panel and choose Magpie. No command required.'
+Write-Output 'Connect Magpie-Rhino in the Magpie Agents page. Choose a model, custom group or strategy there.'
+Write-Output 'Magpie-Rhino 已安装。重启 Rhino 9，打开 AI 面板选择 Magpie，无需输入命令。'

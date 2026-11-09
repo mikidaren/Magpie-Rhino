@@ -41,6 +41,11 @@ var approvals = new List<ToolInvocation>();
 await session.RunAsync("Build test geometry", fixtureConfig, gateway, mcp,
     (call, _) => { approvals.Add(call); return Task.FromResult(true); },
     (_, _) => Task.FromResult("answer"), (_, _) => { }, CancellationToken.None);
+string modelingInstructions = handler.ChatRequests[0]["messages"]![0]!["content"]!.GetValue<string>();
+Check(modelingInstructions.Contains("NURBS") && modelingInstructions.Contains("closed Brep") &&
+    modelingInstructions.Contains("Extrusion"), "default modeling instructions prefer editable curves, surfaces and native solids");
+Check(modelingInstructions.Contains("construction curves") && modelingInstructions.Contains("explicitly requests Mesh/SubD"),
+    "geometry defaults retain construction curves and allow explicit mesh requests");
 Check(handler.Models.All(model => model == "group/custom-routing"), "group ID preserved for every request");
 Check(handler.Authorization.All(value => value == "Bearer fixture-secret"), "gateway authorization is sent");
 Check(handler.Executed.SequenceEqual(new[] { "get_viewport_image", "run_python" }), "MCP tools execute sequentially");

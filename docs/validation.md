@@ -1,5 +1,25 @@
 # Validation
 
+## Version 0.3.4 exact-geometry defaults
+
+Verified on November 9, 2026.
+
+- The default instructions prefer NURBS-compatible profiles and exact surfaces,
+  with native Extrusion or closed Brep representations for volumetric parts.
+  Explicit Mesh/SubD requests remain supported.
+- Per-request document context includes geometry-type counts and absolute
+  tolerance in metres. A normal native-panel request supplied this context.
+- A live test in an isolated metre-based document created two exact ArcCurve
+  profiles, one open Brep canopy surface and one closed Brep column. All four
+  objects were valid. Profile crown points met the 0.001 m tolerance, and column
+  volume matched 0.27 cubic metres.
+- Two default-instruction regressions were added. Agent checks passed at 45,
+  and workflow checks passed at 157. The native Release build had no compiler
+  errors or warnings, and installed/plugin build hashes matched.
+
+The defaults guide agent decisions. Scope-specific geometry readback supplies
+the acceptance evidence for each generated model.
+
 ## Version 0.3.3 remembered YOLO and streamed-detail scrolling
 
 Verified on November 9, 2026.

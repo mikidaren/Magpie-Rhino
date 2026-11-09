@@ -66,6 +66,14 @@ user able to resolve format/unit dialogs.
 
 ## Panel bridge
 
+The default agent geometry route uses exact profile curves, NURBS-compatible
+surfaces and native Extrusion/Brep solids. It keeps analytical primitives exact
+and supports explicitly requested Mesh/SubD deliverables. Document context
+includes geometry-type counts and the absolute tolerance in metres. These facts
+guide tool selection and stage validation. Source curves, real openings and
+decorative panels receive acceptance conditions appropriate to the requested
+design scope. Repeated inspection is consolidated around meaningful edit batches.
+
 The embedded page exposes `window.magpie.applyState(state)`.
 It sends JSON strings through `window.eto.postMessage`.
 In a standalone preview it calls `window.magpiePreviewSend` when provided.

@@ -321,7 +321,11 @@ public sealed class MagpiePanel : Panel
                 units = doc.ModelUnitSystem.ToString(),
                 metersPerDocumentUnit = RhinoMath.UnitScale(doc.ModelUnitSystem, Rhino.UnitSystem.Meters),
                 tolerance = doc.ModelAbsoluteTolerance,
+                toleranceMeters = doc.ModelAbsoluteTolerance * RhinoMath.UnitScale(doc.ModelUnitSystem, Rhino.UnitSystem.Meters),
+                preferredGeometry = "Exact curves and NURBS-compatible surfaces; native Extrusion or Brep solids",
                 liveObjectCount = objects.Count,
+                geometryCounts = objects.GroupBy(item => item.Geometry.GetType().Name)
+                    .ToDictionary(group => group.Key, group => group.Count()),
                 boundingBoxMin = bounds.IsValid ? new[] { bounds.Min.X, bounds.Min.Y, bounds.Min.Z } : null,
                 boundingBoxMax = bounds.IsValid ? new[] { bounds.Max.X, bounds.Max.Y, bounds.Max.Z } : null,
             });

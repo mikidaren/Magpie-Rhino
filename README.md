@@ -1,6 +1,6 @@
 # Magpie-Rhino
 
-Version 0.3.3 remembers YOLO mode and stabilizes scrolling while reading streamed details.
+Version 0.3.4 defaults to editable exact curves, NURBS-compatible surfaces and native solids.
 Magpie appears directly in Rhino's native AI agent menu.
 
 ![Magpie in the native Rhino AI agent menu](docs/native-ai-menu.png)
@@ -19,6 +19,13 @@ routing and provider accounts. Rhino's installed AI plugin supplies the MCP tool
 The architectural workspace adds live streaming, a task plan with acceptance
 conditions, drawing references, scale grounding, repair attempts and human review.
 Architectural mode is enabled initially; direct editing remains available in settings.
+
+The agent starts with profile curves, builds exact surfaces, and forms Extrusion
+or closed Brep solids for volumetric parts. Native lines, arcs, planes and
+revolved surfaces retain their exact representation. Useful construction curves
+follow the requested output scope. Explicit Mesh/SubD requests remain supported.
+Each request supplies current geometry-type counts and absolute tolerance in
+metres. Verification focuses on the active stage and the edited parts.
 
 ## 安装和使用
 

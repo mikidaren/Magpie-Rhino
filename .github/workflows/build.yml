@@ -30,7 +30,7 @@ jobs:
         run: ./tests/install.test.ps1
       - run: npm pack ./Magpie-Rhino --dry-run
   browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

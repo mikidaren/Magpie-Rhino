@@ -238,6 +238,29 @@ try
 }
 catch (InvalidOperationException) { maskedFailureRejected = true; }
 Check(maskedFailureRejected, "unrelated material success cannot mask a failed geometry operation");
+string preferencesTestDirectory = Path.Combine(Path.GetTempPath(), "rhino-execution-mode-" + Guid.NewGuid().ToString("N"));
+string preferencesTestPath = Path.Combine(preferencesTestDirectory, "panel-preferences.json");
+try
+{
+    Check(!PanelPreferences.Read(preferencesTestPath).AutoExecute, "fresh profiles default to tool confirmation");
+    new PanelPreferences(true).Save(preferencesTestPath);
+    Check(PanelPreferences.Read(preferencesTestPath).AutoExecute, "YOLO persists across new preference instances");
+    new PanelPreferences(false).Save(preferencesTestPath);
+    Check(!PanelPreferences.Read(preferencesTestPath).AutoExecute, "switching back to confirmation persists");
+    Check(Directory.GetFiles(preferencesTestDirectory).Length == 1, "saving execution mode leaves no temporary files");
+    File.WriteAllText(preferencesTestPath, "{broken");
+    try
+    {
+        PanelPreferences.Read(preferencesTestPath);
+        throw new Exception("Invalid execution-mode settings accepted");
+    }
+    catch (System.Text.Json.JsonException) { Check(true, "malformed preferences never implicitly enable YOLO"); }
+}
+finally
+{
+    if (File.Exists(preferencesTestPath)) File.Delete(preferencesTestPath);
+    if (Directory.Exists(preferencesTestDirectory)) Directory.Delete(preferencesTestDirectory);
+}
 Console.WriteLine($"{passed} agent checks passed");
 
 sealed class FixtureHandler : HttpMessageHandler

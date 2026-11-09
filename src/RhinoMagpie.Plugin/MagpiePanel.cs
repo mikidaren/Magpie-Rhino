@@ -13,6 +13,9 @@ namespace RhinoMagpie.Plugin;
 [Guid("b2a952a2-34e6-4c81-9846-c152dad14abb")]
 public sealed class MagpiePanel : Panel
 {
+    private static event Action<bool>? ExecutionModeChanged;
+    private static bool? currentExecutionMode;
+    private static long executionModeRevision;
     internal bool IsBusy => running is not null || refreshing is not null;
     private sealed class DocumentChat
     {
@@ -51,7 +54,7 @@ public sealed class MagpiePanel : Panel
     private readonly Button send = new() { Text = "发送" };
     private readonly Button stop = new() { Text = "停止", Enabled = false };
     private readonly Button clear = new() { Text = "新对话" };
-    private readonly CheckBox autoTools = new() { Text = "本次会话自动执行修改", Checked = false };
+    private readonly CheckBox autoTools = new() { Text = "YOLO 自动执行（记住选择）", Checked = false };
     private readonly TextArea transcript = new() { ReadOnly = true, Wrap = true };
     private readonly TextArea prompt = new() { Height = 90, Wrap = true };
     private readonly Label status = new() { Text = "在 Magpie 连接 Rhino 9 AI，然后发送建模要求。", Wrap = WrapMode.Word };
@@ -71,6 +74,12 @@ public sealed class MagpiePanel : Panel
 
     public MagpiePanel()
     {
+        string? preferencesError = null;
+        try { autoTools.Checked = PanelPreferences.Read().AutoExecute; }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
+        {
+            preferencesError = "无法读取执行模式偏好，当前使用逐次确认：" + error.GetType().Name;
+        }
         Padding = new Padding(0);
         MinimumSize = new Size(300, 420);
         Size = new Size(420, 640);
@@ -116,7 +125,6 @@ public sealed class MagpiePanel : Panel
             if (documentSerial != 0) chats[documentSerial] = new DocumentChat();
             transcript.Text = "";
             prompt.Text = "";
-            autoTools.Checked = false;
             PublishState();
         };
         refresh.Click += async (_, _) => await RefreshAsync();
@@ -131,6 +139,9 @@ public sealed class MagpiePanel : Panel
         RhinoDoc.ActiveDocumentChanged += OnActiveDocumentChanged;
         RhinoDoc.CloseDocument += OnDocumentClosed;
         SelectDocument(RhinoDoc.ActiveDoc);
+        ExecutionModeChanged += OnExecutionModeChanged;
+        BroadcastExecutionMode(autoTools.Checked == true);
+        if (preferencesError is not null) status.Text = preferencesError;
         PublishState();
     }
 
@@ -139,6 +150,7 @@ public sealed class MagpiePanel : Panel
         if (disposing && !disposed)
         {
             disposed = true;
+            ExecutionModeChanged -= OnExecutionModeChanged;
             stateTimer.Stop();
             stateTimer.Dispose();
             lifetime.Cancel();
@@ -165,6 +177,33 @@ public sealed class MagpiePanel : Panel
     private void OnActiveDocumentChanged(object? sender, DocumentEventArgs args) =>
         SelectDocument(args.Document);
 
+    private void OnExecutionModeChanged(bool automatic)
+    {
+        if (disposed) return;
+        autoTools.Checked = automatic;
+        PublishState();
+    }
+
+    private static void BroadcastExecutionMode(bool automatic)
+    {
+        if (currentExecutionMode != automatic)
+        {
+            currentExecutionMode = automatic;
+            executionModeRevision++;
+        }
+        ExecutionModeChanged?.Invoke(automatic);
+    }
+
+    private void ReloadExecutionMode()
+    {
+        try { BroadcastExecutionMode(PanelPreferences.Read().AutoExecute); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
+        {
+            BroadcastExecutionMode(false);
+            throw;
+        }
+    }
+
     private void OnDocumentClosed(object? sender, DocumentEventArgs args)
     {
         if (args.DocumentSerialNumber == documentSerial) running?.Cancel();
@@ -178,7 +217,6 @@ public sealed class MagpiePanel : Panel
         if (chats.TryGetValue(documentSerial, out var previous)) previous.Draft = prompt.Text;
         running?.Cancel();
         documentSerial = serial;
-        autoTools.Checked = false;
         if (serial == 0)
         {
             transcript.Text = "";
@@ -256,6 +294,7 @@ public sealed class MagpiePanel : Panel
         uint undo = 0;
         try
         {
+            ReloadExecutionMode();
             var config = MagpieGateway.ReadConfig();
             if (models.SelectedValue is ModelChoice { Id.Length: > 0 } selected)
                 config = config with { Model = selected.Id };
@@ -272,7 +311,6 @@ public sealed class MagpiePanel : Panel
             prompt.Text = "";
             chat.Draft = "";
             status.Text = "运行中 · " + config.Model;
-            bool automatic = autoTools.Checked == true;
             var objects = doc.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject).ToList();
             var bounds = Rhino.Geometry.BoundingBox.Unset;
             foreach (var item in objects)
@@ -300,7 +338,7 @@ public sealed class MagpiePanel : Panel
                         throw new OperationCanceledException(token);
                     return call.Name == "confirm_design_basis"
                         ? ConfirmDesignBasis(call.Arguments["note"]?.GetValue<string>() ?? "", token)
-                        : call.ReadOnly || automatic || ConfirmTool(call, token);
+                        : call.ReadOnly || autoTools.Checked == true || ConfirmTool(call, token);
                 }, token),
                 (arguments, token) => OnUiAsync(() => AskUser(arguments, token), token),
                 (role, text) => Application.Instance.AsyncInvoke(() => { if (!disposed) Append(chat, role, text); }),
@@ -578,6 +616,7 @@ public sealed class MagpiePanel : Panel
             canStop = stop.Enabled,
             draft = prompt.Text,
             autoTools = autoTools.Checked == true,
+            executionModeRevision,
             architectural = chat?.Architectural ?? true,
             detail = chat?.Detail ?? "developed",
             selectedModel = (models.SelectedValue as ModelChoice)?.Id ?? "",
@@ -647,9 +686,22 @@ public sealed class MagpiePanel : Panel
                 var choices = models.DataStore.Cast<ModelChoice>().ToList();
                 models.SelectedIndex = Math.Max(0, choices.FindIndex(choice => choice.Id == selected));
                 break;
+            case "executionMode":
+                if (running is not null || refreshing is not null || chat is null) return;
+                if (message["revision"]?.GetValue<long>() != executionModeRevision)
+                {
+                    status.Text = "执行模式已在其他面板更新，请按当前状态重新选择。";
+                    break;
+                }
+                bool automatic = message["autoTools"]?.GetValue<bool>() == true;
+                if (automatic != (autoTools.Checked == true))
+                {
+                    new PanelPreferences(automatic).Save();
+                    BroadcastExecutionMode(automatic);
+                }
+                break;
             case "options":
                 if (running is not null || refreshing is not null || chat is null) return;
-                autoTools.Checked = message["autoTools"]?.GetValue<bool>() == true;
                 chat.Architectural = message["architectural"]?.GetValue<bool>() != false;
                 string? detail = message["detail"]?.GetValue<string>();
                 if (detail is "concept" or "developed" or "detailed") chat.Detail = detail;

@@ -29,8 +29,23 @@ jobs:
         shell: pwsh
         run: ./tests/install.test.ps1
       - run: npm pack ./Magpie-Rhino --dry-run
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned browser test runtime
+        run: |
+          npm install --no-save --prefix "$RUNNER_TEMP/panel-tests" playwright@1.60.0
+          "$RUNNER_TEMP/panel-tests/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Verify streamed detail scrolling
+        env:
+          PANEL_SCROLL_PLAYWRIGHT: ${{ runner.temp }}/panel-tests/node_modules/playwright
+        run: node --test tests/browser/panel-scroll.test.mjs
   package:
-    needs: test
+    needs: [test, browser]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

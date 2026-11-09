@@ -11,7 +11,7 @@ public sealed record ModelChoice(string Id, string Label)
 
 public sealed class MagpieGateway(HttpClient client)
 {
-    public const string Version = "0.3.2";
+    public const string Version = "0.3.3";
 
     public static string ConfigPath => Path.Combine(ConfigurationDirectory(), "settings.json");
 

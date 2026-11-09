@@ -1,6 +1,6 @@
 # Magpie-Rhino
 
-Version 0.3.2 loads models and routing groups automatically when the panel opens.
+Version 0.3.3 remembers YOLO mode and stabilizes scrolling while reading streamed details.
 Magpie appears directly in Rhino's native AI agent menu.
 
 ![Magpie in the native Rhino AI agent menu](docs/native-ai-menu.png)
@@ -38,7 +38,10 @@ Architectural mode is enabled initially; direct editing remains available in set
 并提供刷新及失败重试提示。
 自定义组和 `auto/...` 策略的 ID 原样传给 Magpie，路由由 Magpie 执行。
 
-可主动勾选 **本次会话自动执行修改**。停止后会等待已发出的 Rhino 操作返回，
+可开启 **YOLO 自动执行**，免逐次工具确认。选择会跨新对话、文档和 Rhino 重启保留，
+底部显示当前为 YOLO 或逐次确认；可随时在设置中切回逐次确认。
+设计提问和假设尺度的确认保持独立。
+停止后会等待已发出的 Rhino 操作返回，
 再结束本轮，继续之前请检查模型。切换或关闭文档会停止当前回合。
 每轮修改由 Rhino 撤销记录包围，可使用 `Ctrl+Z`。
 刷新模型会保留当前选择，刷新期间也可点击停止。提问窗口支持单选、多选和补充说明。
@@ -88,6 +91,11 @@ relevant model state and viewport images requested by the agent pass through
 Magpie to the selected provider. Model compatibility and modeling quality vary.
 Inspect created geometry and review any script or file-write approval.
 
+Execution-mode preferences are stored separately in
+`~/.config/rhino9-magpie/panel-preferences.json`. This file contains no gateway
+credential, and disconnecting the Magpie connection does not reset the preference.
+Fresh profiles default to tool confirmation; enabling YOLO remembers that choice.
+
 ## Build and checks
 
 ```powershell
@@ -98,6 +106,11 @@ dotnet run --project tests/Workflow.Tests -c Release
 dotnet build src/RhinoMagpie.Plugin -c Release
 ./scripts/build-panel.ps1 -YakPath "E:/WORK/Rhino9/System/Yak.exe"
 ```
+
+Streaming-detail browser regressions run with Playwright 1.60.0:
+`node --test tests/browser/panel-scroll.test.mjs`. Set `PANEL_SCROLL_PLAYWRIGHT`
+to an existing Playwright package directory, or install that pinned package and
+its Chromium browser. CI runs these checks before packaging.
 
 The Yak builder can also be downloaded from the official McNeel CLI download
 page. CI uses the pinned Windows x64 Yak 0.19.1 builder and produces the `.yak`,

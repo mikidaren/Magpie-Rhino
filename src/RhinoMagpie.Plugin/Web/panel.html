@@ -258,7 +258,7 @@ h2 {
   padding: 16px;
   scrollbar-width: thin;
   scrollbar-color: var(--line) transparent;
-  overflow-anchor: none;
+  overflow-anchor: auto;
 }
 
 .empty {
@@ -508,6 +508,12 @@ details[open] > summary .chevron {
   font-size: 11px;
   line-height: 1.7;
   margin: 8px 0 0;
+  overscroll-behavior: contain;
+}
+
+.message-detail pre {
+  max-height: 280px;
+  overflow: auto;
 }
 
 .notice {
@@ -765,6 +771,11 @@ textarea::placeholder {
   place-items: center;
   padding: 6px;
   border-radius: 9px;
+}
+
+.execution-mode {
+  color: var(--blue);
+  flex-shrink: 0;
 }
 
 .status-line {
@@ -1103,12 +1114,12 @@ select {
           <button class="send primary" id="send" aria-label="发送" title="发送" disabled><svg id="send-icon" viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>
         </div>
       </div>
-      <div class="status-line"><span class="spinner" id="busy-indicator" hidden aria-hidden="true"></span><span class="status-text" id="status" role="status" aria-live="polite">准备就绪</span><button id="refresh" title="刷新文档与模型信息">刷新</button></div>
+      <div class="status-line"><span class="spinner" id="busy-indicator" hidden aria-hidden="true"></span><span class="execution-mode" id="execution-mode">逐次确认</span><span class="status-text" id="status" role="status" aria-live="polite">准备就绪</span><button id="refresh" title="刷新文档与模型信息">刷新</button></div>
     </footer>
   </div>
   <section class="popover" id="settings" aria-label="设置" hidden>
-    <h2>会话设置</h2>
-    <label class="setting"><span class="setting-copy">自动执行工具<small>允许本次会话自动执行模型修改</small></span><input type="checkbox" id="auto-tools"></label>
+    <h2>执行与建模设置</h2>
+    <label class="setting"><span class="setting-copy">YOLO 自动执行<small>免逐次工具确认，跨对话和重启记住选择；尺度假设仍会询问</small></span><input type="checkbox" id="auto-tools"></label>
     <label class="setting"><span class="setting-copy">建筑模式<small>先确认图纸与尺度，再分阶段建模</small></span><input type="checkbox" id="architectural" checked></label>
     <label class="setting" for="detail"><span>目标精细度</span><select id="detail"><option value="concept">概念</option><option value="developed" selected>深化</option><option value="detailed">详细</option></select></label>
   </section>
@@ -1137,7 +1148,7 @@ select {
   const byId = function (id) { return document.getElementById(id); };
   const viewport = byId("viewport");
   const composer = byId("draft");
-  const state = { documentId: "", document: "", units: "", unitsKey: "", status: "", busy: false, canSend: false, canStop: false, draft: "", autoTools: false, architectural: true, detail: "developed", models: [], catalogLoading: false, catalogError: "", selectedModel: "", messages: [], references: [], plan: null };
+  const state = { documentId: "", document: "", units: "", unitsKey: "", status: "", busy: false, canSend: false, canStop: false, draft: "", autoTools: false, executionModeRevision: 0, architectural: true, detail: "developed", models: [], catalogLoading: false, catalogError: "", selectedModel: "", messages: [], references: [], plan: null };
   const messageNodes = new Map();
   const stepNodes = new Map();
   const referenceNodes = new Map();
@@ -1155,10 +1166,17 @@ select {
   let lastHostDraft = "";
   let bridgeError = "";
   let followFrame = null;
+  let scrollDrag = null;
+  let touchScrollY = null;
   function string(value) { return value == null ? "" : String(value); }
   function text(node, value) {
     const next = string(value);
-    if (node.textContent !== next) node.textContent = next;
+    const previous = node.textContent;
+    if (previous === next) return;
+    if (node.matches("pre, .message-text") && node.childNodes.length === 1 &&
+        node.firstChild.nodeType === Node.TEXT_NODE && next.startsWith(previous)) {
+      node.firstChild.appendData(next.slice(previous.length));
+    } else node.textContent = next;
   }
   function element(tag, className, content) {
     const node = document.createElement(tag);
@@ -1211,8 +1229,22 @@ select {
   function publicStatus() {
     return bridgeError || string(state.status) || (state.busy ? "正在执行" : "准备就绪");
   }
-  function nearBottom() { return viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop < 48; }
-  function updateJump() { byId("jump").hidden = pinned || viewport.scrollHeight <= viewport.clientHeight + 48; }
+  function nearBottom() { return viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop <= 2; }
+  function updateJump() { byId("jump").hidden = pinned || viewport.scrollHeight <= viewport.clientHeight + 2; }
+  function pauseFollow() {
+    pinned = false;
+    if (followFrame !== null) cancelAnimationFrame(followFrame);
+    followFrame = null;
+    updateJump();
+  }
+  function scrollIntent(target, distance) {
+    pauseFollow();
+    if (target.closest(".tool-detail, .message-detail pre, .plan-content")) return;
+    if (distance > 0 && viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop <= distance + 2) {
+      pinned = true;
+      followBottom();
+    }
+  }
   function followBottom() {
     if (followFrame !== null) cancelAnimationFrame(followFrame);
     followFrame = requestAnimationFrame(function () {
@@ -1246,6 +1278,8 @@ select {
     byId("catalog-status").title = string(state.catalogError);
     byId("busy-indicator").hidden = !state.busy;
     text(byId("status"), publicStatus());
+    text(byId("execution-mode"), state.autoTools ? "YOLO" : "逐次确认");
+    byId("execution-mode").title = state.autoTools ? "自动执行工具 · 已记住选择" : "每次修改前确认";
     byId("status").title = publicStatus();
   }
   function reconcile(container, items, cache, create, update) {
@@ -1494,7 +1528,6 @@ select {
         fitComposer();
         send({ action: "draft", text: "", documentId: documentId });
       }
-      pinned = true;
       refreshControls();
       followBottom();
     }
@@ -1503,8 +1536,6 @@ select {
     applyState: function (incoming) {
       if (!incoming || typeof incoming !== "object") return;
       bridgeError = "";
-      const top = viewport.scrollTop;
-      const wasPinned = pinned;
       const previousDocumentId = string(state.documentId);
       const modelsBefore = JSON.stringify([state.models, state.selectedModel, state.busy]);
       Object.keys(state).forEach(function (key) {
@@ -1558,9 +1589,8 @@ select {
         }
       }
       refreshControls();
-      pinned = wasPinned;
-      if (wasPinned) followBottom();
-      else { viewport.scrollTop = top; updateJump(); }
+      if (pinned) followBottom();
+      else updateJump();
     }
   };
   composer.addEventListener("input", function () {
@@ -1616,9 +1646,12 @@ select {
     }
     if (event.key === "Enter" && document.activeElement === byId("model-search") && options.length === 1) { event.preventDefault(); options[0].click(); }
   });
-  ["auto-tools", "architectural", "detail"].forEach(function (id) {
+  byId("auto-tools").addEventListener("change", function () {
+    send({ action: "executionMode", autoTools: byId("auto-tools").checked, revision: state.executionModeRevision });
+  });
+  ["architectural", "detail"].forEach(function (id) {
     byId(id).addEventListener("change", function () {
-      send({ action: "options", autoTools: byId("auto-tools").checked, architectural: byId("architectural").checked, detail: byId("detail").value });
+      send({ action: "options", architectural: byId("architectural").checked, detail: byId("detail").value });
     });
   });
   byId("width-cancel").addEventListener("click", closeWidth);
@@ -1657,7 +1690,55 @@ select {
     }
     if (event.key === "Escape") ["settings", "model-picker"].forEach(function (id) { if (!byId(id).hidden) closePopover(id, true); });
   });
-  viewport.addEventListener("scroll", function () { pinned = nearBottom(); updateJump(); }, { passive: true });
+  viewport.addEventListener("scroll", updateJump, { passive: true });
+  viewport.addEventListener("click", function (event) {
+    if (event.isTrusted && event.target.closest("summary")) pauseFollow();
+  }, true);
+  viewport.addEventListener("wheel", function (event) {
+    if (!event.isTrusted || event.ctrlKey || !event.deltaY) return;
+    const unit = event.deltaMode === 1 ? 20 : event.deltaMode === 2 ? viewport.clientHeight : 1;
+    scrollIntent(event.target, event.deltaY * unit);
+  }, { passive: true });
+  viewport.addEventListener("keydown", function (event) {
+    if (!event.isTrusted || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey ||
+        event.target.closest("input, textarea, select, button, [contenteditable]")) return;
+    if (event.key === " " && event.target.closest("summary")) return;
+    const page = viewport.clientHeight * .875;
+    const distances = { ArrowUp: -40, ArrowDown: 40, PageUp: -page, PageDown: page, Home: -Infinity, End: Infinity, " ": event.shiftKey ? -page : page };
+    if (Object.prototype.hasOwnProperty.call(distances, event.key)) scrollIntent(event.target, distances[event.key]);
+  });
+  viewport.addEventListener("touchstart", function (event) {
+    if (!event.isTrusted) return;
+    pauseFollow();
+    touchScrollY = event.touches.length === 1 ? event.touches[0].clientY : null;
+  }, { passive: true });
+  viewport.addEventListener("touchmove", function (event) {
+    if (!event.isTrusted || touchScrollY === null || event.touches.length !== 1) return;
+    const nextY = event.touches[0].clientY;
+    scrollIntent(event.target, touchScrollY - nextY);
+    touchScrollY = nextY;
+  }, { passive: true });
+  viewport.addEventListener("touchend", function () { touchScrollY = null; }, { passive: true });
+  viewport.addEventListener("touchcancel", function () { touchScrollY = null; }, { passive: true });
+  viewport.addEventListener("pointerdown", function (event) {
+    if (!event.isTrusted || event.pointerType !== "mouse" || event.button !== 0) return;
+    if (event.target.closest("pre, .message-text, .goal, .basis-note")) pauseFollow();
+    if (event.target !== viewport) return;
+    const bounds = viewport.getBoundingClientRect();
+    const contentLeft = bounds.left + viewport.clientLeft;
+    if (event.clientX >= contentLeft && event.clientX < contentLeft + viewport.clientWidth) return;
+    pauseFollow();
+    scrollDrag = { pointerId: event.pointerId, top: viewport.scrollTop, y: event.clientY };
+  });
+  document.addEventListener("pointerup", function (event) {
+    if (!scrollDrag || scrollDrag.pointerId !== event.pointerId) return;
+    if (event.isTrusted && event.clientY > scrollDrag.y && viewport.scrollTop > scrollDrag.top && nearBottom()) {
+      pinned = true;
+      followBottom();
+    }
+    scrollDrag = null;
+  });
+  document.addEventListener("pointercancel", function () { scrollDrag = null; });
   byId("jump").addEventListener("click", function () { pinned = true; followBottom(); });
   window.addEventListener("resize", function () { fitComposer(); if (pinned) followBottom(); else updateJump(); });
   if (typeof ResizeObserver === "function") new ResizeObserver(function () { if (pinned) followBottom(); else updateJump(); }).observe(byId("viewport"));

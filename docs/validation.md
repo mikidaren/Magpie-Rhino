@@ -1,5 +1,37 @@
 # Validation
 
+## Version 0.3.3 remembered YOLO and streamed-detail scrolling
+
+Verified on November 9, 2026.
+
+- YOLO preferences persist in a separate `panel-preferences.json`. New profiles
+  default to confirmation; new conversations and document changes retain the
+  choice. Saving does not modify gateway credentials.
+- Native test restored YOLO in a new Rhino process and a new panel. A real
+  `run_csharp` call completed without a tool-confirmation dialog and printed
+  `YOLO_MODE_OK 11`, without changing geometry.
+- Two-panel review reproduced stale automatic permission after revocation.
+  Live panels now synchronize execution mode, and each tool reads the current
+  permission. Runs reload the stored preference before dispatch.
+- A second reproduced race involved unrelated stale options re-enabling YOLO.
+  Permission changes now use a dedicated action and revision; architecture and
+  detail updates contain no permission field.
+- Streaming browser regressions originally reproduced six failures, including
+  expansion jumping from scrollTop 2073 to 2401. Trusted scroll intent now
+  controls following, and native anchoring preserves the reading position.
+- Browser cases cover detail expansion, nested wheel boundaries, stream growth,
+  resizing, scrollbar dragging, delayed images and text selection. They also
+  verify isolated execution-mode messages and permission revisions.
+- Embedded Rhino WebView trusted input verified streaming position remained
+  2286 to 2286 and nested bottom-wheel input left the outer position 2482 to 2482.
+- Native two-panel tests verified revocation in the other panel and rejection
+  of both unrelated stale options and stale execution-mode revisions.
+- Agent checks: 43 passed; workflow checks: 157 passed; browser checks: 20 passed.
+  Browser checks are
+  included as a required CI job before packaging.
+- The marketplace Agents table uses `rhino9-ai` as its package slug while
+  retaining the product display name Magpie-Rhino.
+
 ## Version 0.3.2 automatic model catalog
 
 Verified on November 9, 2026.

@@ -1,5 +1,22 @@
 # Validation
 
+## Version 0.3.2 automatic model catalog
+
+Verified on November 9, 2026.
+
+- Reproduced the reported defect in installed 0.3.1: opening the panel, without
+  clicking Refresh, left only one placeholder choice and zero routing groups.
+- The same authenticated gateway returned 484 eligible entries, including 80
+  routing groups. All 80 groups advertised tool-call support.
+- After installing 0.3.2 in an owned Rhino test process, opening the panel
+  automatically loaded 485 choices including the follow entry and all 80 groups.
+- Native DOM readback confirmed 485 rendered options, the displayed group/entry
+  counts, the `group/smart-split` option, and the preserved default selection.
+- The JavaScript syntax check, 4 descriptor tests and 38 agent checks passed.
+  Release compilation completed with zero errors or warnings.
+- The user's already-open Rhino process was preserved. Installed DLL and built
+  DLL SHA256 hashes matched; a Rhino restart loads the new plugin.
+
 ## Version 0.3.1 Magpie-Rhino release
 
 Verified on November 9, 2026, with installed Magpie 0.1.3323 and Rhino 9

@@ -1,6 +1,7 @@
 # Magpie-Rhino
 
-Version 0.3.1 adds Magpie directly to Rhino's native AI agent menu.
+Version 0.3.2 loads models and routing groups automatically when the panel opens.
+Magpie appears directly in Rhino's native AI agent menu.
 
 ![Magpie in the native Rhino AI agent menu](docs/native-ai-menu.png)
 
@@ -33,6 +34,8 @@ Architectural mode is enabled initially; direct editing remains available in set
 
 面板默认选择 **跟随 Magpie 当前模型 / 自定义组**，每次发送重新读取连接配置。
 点击刷新模型可读取 Magpie 的完整模型及组列表，也可在面板内临时选择。
+列表会在面板启动时自动加载，打开下拉框时按需更新；下拉框底部显示路由组数量，
+并提供刷新及失败重试提示。
 自定义组和 `auto/...` 策略的 ID 原样传给 Magpie，路由由 Magpie 执行。
 
 可主动勾选 **本次会话自动执行修改**。停止后会等待已发出的 Rhino 操作返回，

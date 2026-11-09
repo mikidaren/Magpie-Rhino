@@ -57,6 +57,8 @@ public sealed class MagpiePanel : Panel
     private readonly Label status = new() { Text = "在 Magpie 连接 Rhino 9 AI，然后发送建模要求。", Wrap = WrapMode.Word };
     private CancellationTokenSource? running;
     private CancellationTokenSource? refreshing;
+    private DateTime catalogRefreshedAt = DateTime.MinValue;
+    private string catalogError = "";
     private readonly CancellationTokenSource lifetime = new();
     private bool disposed;
     private bool transportsDisposed;
@@ -206,7 +208,9 @@ public sealed class MagpiePanel : Panel
     {
         if (disposed || running is not null || refreshing is not null) return;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        cancellation.CancelAfter(TimeSpan.FromSeconds(20));
         refreshing = cancellation;
+        catalogError = "";
         SetBusy(false);
         status.Text = "正在获取 Magpie 模型、自定义组和策略…";
         try
@@ -217,10 +221,14 @@ public sealed class MagpiePanel : Panel
             cancellation.Token.ThrowIfCancellationRequested();
             if (disposed) return;
             SetModelChoices(choices, selectedId);
+            catalogRefreshedAt = DateTime.UtcNow;
             status.Text = $"Magpie 已连接 · {choices.Count} 个模型及策略 · 当前 {config.Model}";
         }
-        catch (OperationCanceledException) { if (!disposed) status.Text = "已停止刷新，保留之前的模型选择。"; }
-        catch (Exception error) { if (!disposed) status.Text = FriendlyError(error); }
+        catch (OperationCanceledException)
+        {
+            if (!disposed) status.Text = catalogError = "刷新已取消或超时，保留之前的模型选择，可重试。";
+        }
+        catch (Exception error) { if (!disposed) status.Text = catalogError = FriendlyError(error); }
         finally
         {
             refreshing = null;
@@ -574,6 +582,8 @@ public sealed class MagpiePanel : Panel
             detail = chat?.Detail ?? "developed",
             selectedModel = (models.SelectedValue as ModelChoice)?.Id ?? "",
             models = models.DataStore?.Cast<ModelChoice>().ToList() ?? [],
+            catalogLoading = refreshing is not null,
+            catalogError,
             messages = chat?.Messages.TakeLast(120).Where(message =>
                 message.Type != "message" || message.State == "running" || message.Text.Length > 0).ToList() ?? [],
             plan = chat is not null && (chat.Session.Workflow.Steps.Count > 0 || chat.Session.Workflow.Basis.Length > 0)
@@ -607,10 +617,17 @@ public sealed class MagpiePanel : Panel
         chats.TryGetValue(documentSerial, out var chat);
         switch (action)
         {
-            case "ready": PublishState(); break;
+            case "ready":
+                PublishState();
+                await RefreshAsync();
+                break;
             case "draft": prompt.Text = message["text"]?.GetValue<string>() ?? ""; break;
             case "stop": stop.PerformClick(); break;
             case "refresh": await RefreshAsync(); break;
+            case "catalog":
+                if (catalogError.Length > 0 || DateTime.UtcNow - catalogRefreshedAt > TimeSpan.FromSeconds(30))
+                    await RefreshAsync();
+                break;
             case "send":
                 if (!send.Enabled) return;
                 prompt.Text = message["text"]?.GetValue<string>() ?? "";

@@ -1,7 +1,13 @@
 # Magpie-Rhino
 
-Version 0.3.4 defaults to editable exact curves, NURBS-compatible surfaces and native solids.
+The local 0.4.1 candidate includes a private offline IFC runtime and lightweight OpenBIM tools.
+It retains editable exact curves, NURBS-compatible surfaces and native solids.
 Magpie appears directly in Rhino's native AI agent menu.
+
+**Public binary availability:** the latest published Release is 0.3.4. The 0.4.1
+source in this branch is under development; its full offline IFC binary is not yet
+published while third-party source and redistribution details are reviewed.
+The 0.3.4 download does not contain the 0.4.1 OpenBIM and offline IFC features.
 
 ![Magpie in the native Rhino AI agent menu](docs/native-ai-menu.png)
 
@@ -26,6 +32,51 @@ revolved surfaces retain their exact representation. Useful construction curves
 follow the requested output scope. Explicit Mesh/SubD requests remain supported.
 Each request supplies current geometry-type counts and absolute tolerance in
 metres. Verification focuses on the active stage and the edited parts.
+
+## 简易 OpenBIM：方案与深化
+
+这一版本把可复用建模工具接入了面板，不只是增加提示词。项目记录楼层标高和高度、
+轴网与空间分区、墙线和厚度、门窗位置及简单类型、楼板洞口、直跑楼梯。
+不要求材料层、墙窗节点、连接构造或施工详图参数；门窗深度可省略，内部默认 0.12 m。
+Rhino 中仍然是精确曲线和 Brep 实体；同型门窗使用真实共享 Block。
+
+四个本地工具负责查询参数、应用小补丁、读回检查和 IFC 导出：
+`openbim_catalog`、`openbim_apply`、`openbim_inspect`、`openbim_export_ifc`。
+例如改窗宽只需要 `{"types":[{"id":"WIN-A","width":1.5}]}`，
+不必重新生成或反复传送建模脚本。窗口实例、共享定义和相关墙洞一起更新。
+补丁携带当前版本，不能用旧版本覆盖新项目；手动几何修改会被检测，
+手动图层、颜色、名称、分组和自定义属性保留。
+
+工具源位于 [Miki-GrasshopperWarehouse](https://github.com/mikidaren/Miki-GrasshopperWarehouse)。
+当前产品使用 `vendor/openbim/snapshot.json` 记录的固定源码及 SHA256，运行中不下载代码。
+这是原生参数化内核，不是完整的可视化 `.gh` 定义库或 Revit 替代品。
+当前支持直墙、矩形门窗、直跑概念楼梯；曲墙、异形窗和施工级 BIM 尚未覆盖。
+首版限制为估算 5,000 个生成部分，防止超大输入卡住 Rhino。
+
+### 内置离线 IFC
+
+完整 0.4.1 包自带私有 CPython 3.12.13、IfcOpenShell 0.9.0.post1 和固定依赖。
+用户无需安装 Python、运行 pip 或配置路径。解释器不加载进 Rhino，而是在独立后台进程中执行。
+插件只解析自身 `openbim/runtime`，不会回退到系统 Python、开发环境或旧连接配置。
+启动使用隔离模式，禁止用户模块路径、site 初始化和字节码写入，不继承模型服务的环境凭据。
+
+在面板设置中选择 **导出 IFC**，即可直接选择目标文件并读回验证，不调用模型、消耗模型 tokens
+或要求 Magpie 网关可用。仍可让 AI 调用同一个本地导出工具。
+IFC 导出与核对可离线执行；云模型对话仍需要相应网络与服务。
+
+内置组件及导出脚本有文件清单与 SHA256 检查；缺失或损坏会提示重新安装完整包，
+不会临时下载依赖或让用户手动修环境。导出不会覆盖已有文件。
+它会重新读取 IFC4，核对实际几何体积、尺寸、楼层、共享类型和洞口关联，
+不以“文件存在”代替验证。IFC 不保证 Revit 族或 Grasshopper 参数历史往返。
+`.3dm` 内保存原生几何、共享 Block 及简易项目源状态。
+
+当前完整包仅供本机验证：捆绑的原生组件涉及 CGAL 等多种许可证，
+`openbim/runtime/licenses/PUBLIC-RELEASE-GATE.md` 明确列出未闭环项。
+材料收集不等于法律合规审定，公开二进制上传与 Release 在审阅完成前被构建流程阻止。
+此限制不冒充 Python 安装问题，也不会把开发环境路径写成用户配置。
+
+开发构建见 `docs/superpowers/specs/2026-11-10-offline-ifc-runtime-design.md`。
+构建期源码证据与依赖下载需要显式选项，最终用户运行时不下载代码或依赖。
 
 ## 安装和使用
 

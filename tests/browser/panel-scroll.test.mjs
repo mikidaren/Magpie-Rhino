@@ -383,3 +383,127 @@ test("execution mode changes carry the current permission revision", async () =>
   await page.evaluate(() => window.magpie.applyState({ autoTools: false, executionModeRevision: 18 }));
   assert.equal(await page.locator("#execution-mode").textContent(), "逐次确认");
 }));
+
+test("offline IFC export dispatches without a model or send permission after catalog failure", async () => fixture(async page => {
+  await page.evaluate(() => {
+    window.sentActions = [];
+    window.magpiePreviewSend = action => window.sentActions.push(action);
+    window.magpie.applyState({
+      canSend: false, busy: false, canStop: false, models: [], selectedModel: "",
+      catalogLoading: false, catalogError: "Magpie is offline", autoTools: true, executionModeRevision: 17,
+      architectural: false, detail: "detailed"
+    });
+  });
+  await page.locator("#settings-button").click();
+  const button = page.getByRole("button", { name: "导出 IFC", exact: true });
+  assert.equal(await button.count(), 1, "settings must expose the offline export action");
+  assert.equal(await button.isEnabled(), true);
+  await button.click();
+  assert.deepEqual(await page.evaluate(() => window.sentActions), [
+    { action: "exportIfc", documentId: "scroll-fixture" }
+  ]);
+  assert.equal(await page.locator("#execution-mode").textContent(), "YOLO");
+  await page.locator("#settings-button").click();
+  assert.equal(await page.locator("#auto-tools").isChecked(), true);
+  assert.equal(await page.locator("#architectural").isChecked(), false);
+  assert.equal(await page.locator("#detail").inputValue(), "detailed");
+}));
+
+for (const [name, activity] of [
+  ["an AI turn", { busy: true, canStop: true, catalogLoading: false }],
+  ["a model refresh", { busy: true, canStop: true, catalogLoading: true }],
+  ["pending cancellation", { busy: true, canStop: false, catalogLoading: false }]
+]) {
+  test(`offline IFC export stays disabled during ${name} until the host releases its lock`, async () => fixture(async page => {
+    await page.evaluate(activity => {
+      window.sentActions = [];
+      window.magpiePreviewSend = action => window.sentActions.push(action);
+      window.magpie.applyState({ ...activity, canSend: false });
+    }, activity);
+    await page.locator("#settings-button").click();
+    const button = page.getByRole("button", { name: "导出 IFC", exact: true });
+    assert.equal(await button.count(), 1);
+    assert.equal(await button.isDisabled(), true);
+    await button.evaluate(node => node.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    assert.deepEqual(await page.evaluate(() => window.sentActions), []);
+    if (activity.canStop) {
+      await page.locator("#send").click();
+      assert.deepEqual(await page.evaluate(() => window.sentActions), [{ action: "stop" }]);
+      await page.locator("#settings-button").click();
+      assert.equal(await button.isDisabled(), true);
+    }
+    await page.evaluate(() => {
+      window.sentActions = [];
+      window.magpie.applyState({ busy: false, canStop: false, catalogLoading: false, canSend: false });
+    });
+    assert.equal(await button.isEnabled(), true);
+    if (await page.locator("#settings").isHidden()) await page.locator("#settings-button").click();
+    await button.click();
+    assert.deepEqual(await page.evaluate(() => window.sentActions), [
+      { action: "exportIfc", documentId: "scroll-fixture" }
+    ]);
+  }));
+}
+
+test("offline IFC export requires an active document", async () => fixture(async page => {
+  await page.evaluate(() => {
+    window.sentActions = [];
+    window.magpiePreviewSend = action => window.sentActions.push(action);
+  });
+  await page.locator("#settings-button").click();
+  const button = page.getByRole("button", { name: "导出 IFC", exact: true });
+  assert.equal(await button.count(), 1);
+  for (const documentId of ["", "0"]) {
+    await page.evaluate(documentId => window.magpie.applyState({ documentId, busy: false, canStop: false }), documentId);
+    assert.equal(await button.isDisabled(), true);
+    await button.evaluate(node => node.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  }
+  assert.deepEqual(await page.evaluate(() => window.sentActions), []);
+}));
+
+test("offline IFC export binds its action to the current document after switching", async () => fixture(async page => {
+  await page.evaluate(() => {
+    window.sentActions = [];
+    window.magpiePreviewSend = action => window.sentActions.push(action);
+    window.magpie.applyState({ canSend: false });
+  });
+  await page.locator("#settings-button").click();
+  const button = page.getByRole("button", { name: "导出 IFC", exact: true });
+  assert.equal(await button.count(), 1);
+  await page.evaluate(() => window.magpie.applyState({ documentId: "second-document", draft: "second document draft" }));
+  await button.click();
+  assert.deepEqual(await page.evaluate(() => window.sentActions), [
+    { action: "exportIfc", documentId: "second-document" }
+  ]);
+  assert.equal(await page.locator("#draft").inputValue(), "second document draft");
+}));
+
+for (const [state, title, detail, status] of [
+  ["done", "IFC 导出完成", "IFC4 已重新读取并验证几何及关系。\nC:/exports/model.ifc", "done"],
+  ["error", "IFC 导出失败", "目标文件已存在，请使用新文件名，未覆盖原文件。", "failed"]
+]) {
+  test(`offline IFC ${state} card preserves the reading position, draft and execution mode`, async () => fixture(async page => {
+    await wheel(page, "#viewport", -500);
+    await page.locator("#draft").fill("keep my unsent design request");
+    await page.evaluate(() => window.magpie.applyState({ autoTools: true, executionModeRevision: 17, canSend: false }));
+    await settle(page);
+    const before = await metrics(page);
+    await page.evaluate(() => {
+      window.fixtureMessages.push({ id: "offline-ifc", type: "tool", text: "导出 IFC 并读回验证", state: "running" });
+      window.magpie.applyState({ messages: window.fixtureMessages, busy: true, canStop: true });
+    });
+    await settle(page);
+    await page.evaluate(({ state, title, detail }) => {
+      Object.assign(window.fixtureMessages.at(-1), { state, text: title, detail });
+      window.magpie.applyState({ messages: window.fixtureMessages, busy: false, canStop: false, canSend: false });
+    }, { state, title, detail });
+    await settle(page);
+    const card = page.locator(".tool").last();
+    assert.equal(await card.getAttribute("data-status"), status);
+    assert.equal(await card.locator(".tool-name").textContent(), title);
+    assert.equal(await card.locator(".tool-detail").textContent(), detail);
+    assert.ok(Math.abs((await metrics(page)).top - before.top) <= 2);
+    assert.equal(await page.locator("#draft").inputValue(), "keep my unsent design request");
+    assert.equal(await page.locator("#execution-mode").textContent(), "YOLO");
+  }));
+}

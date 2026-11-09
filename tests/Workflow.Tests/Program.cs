@@ -872,6 +872,7 @@ await ReviewRegression("verbose native results preserve ledger metadata", async 
 
 if (reviewFailures.Count > 0)
     throw new AggregateException("Review regressions failed.", reviewFailures);
+passed += await LocalToolTests.RunAsync(config);
 Console.WriteLine($"{passed} workflow checks passed");
 
 static class Wire
@@ -975,6 +976,7 @@ sealed class HttpFixture(Func<int, JsonObject, HttpResponseMessage> chat) : Http
     public static Uri McpEndpoint { get; } = new("http://localhost:10500/agent");
     public List<JsonObject> ChatRequests { get; } = [];
     public List<ToolInvocation> Executed { get; } = [];
+    public JsonArray ExtraTools { get; } = [];
     public Func<ToolInvocation, JsonObject> ToolResult { get; set; } = _ => Wire.Result("Done");
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
@@ -1005,6 +1007,7 @@ sealed class HttpFixture(Func<int, JsonObject, HttpResponseMessage> chat) : Http
                         ["readOnlyHint"] = name is "get_context" or "list_objects",
                     },
                 });
+            foreach (var tool in ExtraTools) tools.Add(tool?.DeepClone());
             result = new JsonObject { ["tools"] = tools };
         }
         else if (method == "tools/call")

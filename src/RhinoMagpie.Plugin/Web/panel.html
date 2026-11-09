@@ -1122,6 +1122,7 @@ select {
     <label class="setting"><span class="setting-copy">YOLO 自动执行<small>免逐次工具确认，跨对话和重启记住选择；尺度假设仍会询问</small></span><input type="checkbox" id="auto-tools"></label>
     <label class="setting"><span class="setting-copy">建筑模式<small>先确认图纸与尺度，再分阶段建模</small></span><input type="checkbox" id="architectural" checked></label>
     <label class="setting" for="detail"><span>目标精细度</span><select id="detail"><option value="concept">概念</option><option value="developed" selected>深化</option><option value="detailed">详细</option></select></label>
+    <div class="setting"><span class="setting-copy">本地 IFC 导出<small>选择保存位置并读回验证</small></span><button class="secondary" id="export-ifc" type="button" disabled>导出 IFC</button></div>
   </section>
   <section class="popover model-popover" id="model-picker" aria-label="选择模型" hidden>
     <label class="sr-only" for="model-search">搜索模型名称或 ID</label><input class="search" id="model-search" type="search" placeholder="搜索模型名称或 ID…" autocomplete="off">
@@ -1271,6 +1272,8 @@ select {
     ["new-chat", "attach", "empty-attach", "continue", "accept", "auto-tools", "architectural", "detail", "refresh"].forEach(function (id) { byId(id).disabled = Boolean(state.busy); });
     byId("model-button").disabled = Boolean(state.busy);
     byId("catalog-refresh").disabled = Boolean(state.busy);
+    byId("export-ifc").disabled = Boolean(state.busy || state.canStop || state.catalogLoading) ||
+      !string(state.documentId) || string(state.documentId) === "0";
     const catalog = state.models.filter(function (model) { return model && model.id; });
     const groups = catalog.filter(function (model) { return /^(group|auto)\//.test(model.id); }).length;
     text(byId("catalog-status"), state.catalogLoading ? "正在获取模型与路由组…" :
@@ -1615,6 +1618,10 @@ select {
   byId("empty-attach").addEventListener("click", function () { send({ action: "attach" }); });
   byId("refresh").addEventListener("click", function () { send({ action: "refresh" }); });
   byId("catalog-refresh").addEventListener("click", function () { send({ action: "refresh" }); });
+  byId("export-ifc").addEventListener("click", function () {
+    if (byId("export-ifc").disabled) return;
+    if (send({ action: "exportIfc", documentId: string(state.documentId) })) closePopover("settings", true);
+  });
   byId("new-chat").addEventListener("click", function () {
     const documentId = string(state.documentId);
     if (send({ action: "clear", documentId: documentId }) && documentId === string(state.documentId)) {

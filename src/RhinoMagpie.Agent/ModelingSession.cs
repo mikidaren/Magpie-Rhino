@@ -59,15 +59,16 @@ public sealed class ModelingSession
         For assumed dimensions, call set_design_basis with the exact proposed scale note.
         The panel itself asks for explicit approval of that note. Other question answers and
         automatic tool execution do not approve a scale assumption.
+        For simple OpenBIM work, prefer a reusable project-schema call and omit material and junction details.
         Rhino C# scripts run inside a void entry point: output with System.Console.WriteLine,
         not a top-level return object. LayerTable.FindName returns a Layer; use layer.Index.
         Never use C# reserved words such as base as variable or parameter names.
         The panel owns undo recording. Do not start/end undo records, disable undo, or clear
         undo history in scripts. On a compilation error, correct the code and retry in a smaller
         batch. A failed script is unfinished work. Do not announce success or silently stop.
-        Every native result includes an operationId. Failed modifications remain outstanding
+        Every dispatched result includes an operationId. Failed modifications remain outstanding
         across turns. Correct the same stage and operation family, obtain fresh get_context or
-        list_objects after all modifications, then call resolve_modeling_failure with the failed,
+        list_objects or openbim_inspect after all modifications, then call resolve_modeling_failure with the failed,
         corrective and readback operation IDs and an actual verification. Resolve each failure
         separately. Unrelated successful operations never clear a failure.
         """;
@@ -81,7 +82,8 @@ public sealed class ModelingSession
         string prompt, BridgeConfig config, MagpieGateway gateway, RhinoMcpClient mcp,
         Func<ToolInvocation, CancellationToken, Task<bool>> approve,
         Func<JsonObject, CancellationToken, Task<string>> askUser,
-        Action<string, string> report, CancellationToken token, ModelingRunOptions? options = null)
+        Action<string, string> report, CancellationToken token, ModelingRunOptions? options = null,
+        ILocalModelingTools? localTools = null)
     {
         if (!await gate.WaitAsync(0, token)) throw new InvalidOperationException("当前会话仍在运行。");
         try
@@ -91,9 +93,30 @@ public sealed class ModelingSession
             Outcome = "running";
             Workflow.BeginRun(options.Units);
             await mcp.InitializeAsync(token);
-            var definitions = (await mcp.ListToolsAsync(token)).OfType<JsonObject>()
-                .Where(tool => IsAllowedTool(tool["name"]!.GetValue<string>()))
-                .ToDictionary(tool => tool["name"]!.GetValue<string>(), StringComparer.Ordinal);
+            var definitions = new Dictionary<string, JsonObject>(StringComparer.Ordinal);
+            foreach (var definition in (await mcp.ListToolsAsync(token)).OfType<JsonObject>()
+                .Where(tool => IsAllowedTool(tool["name"]!.GetValue<string>())))
+            {
+                string name = definition["name"]!.GetValue<string>();
+                if (name is "set_design_basis" or "update_project_plan" or "resolve_modeling_failure" ||
+                    !definitions.TryAdd(name, definition))
+                    throw new InvalidOperationException("Duplicate or reserved tool name: " + name);
+            }
+            var localNames = new HashSet<string>(StringComparer.Ordinal);
+            if (localTools is not null)
+            {
+                foreach (var node in localTools.ListTools())
+                {
+                    if (node is not JsonObject definition || definition["name"] is not JsonValue nameValue ||
+                        !nameValue.TryGetValue<string>(out var name) || string.IsNullOrEmpty(name) ||
+                        !name.StartsWith("openbim_", StringComparison.Ordinal) || name.Length == "openbim_".Length ||
+                        definition["inputSchema"] is not JsonObject)
+                        throw new InvalidOperationException("Local tools require an openbim_ name and an MCP inputSchema object.");
+                    if (!definitions.TryAdd(name, definition.DeepClone().AsObject()))
+                        throw new InvalidOperationException("Duplicate or reserved tool name: " + name);
+                    localNames.Add(name);
+                }
+            }
             var tools = new JsonArray(definitions.Values.Select(tool => (JsonNode)new JsonObject
             {
                 ["type"] = "function",
@@ -206,6 +229,7 @@ public sealed class ModelingSession
                         token.ThrowIfCancellationRequested();
                         string id = call["id"]!.GetValue<string>();
                         string name = call["function"]!["name"]!.GetValue<string>();
+                        bool isLocal = localNames.Contains(name);
                         JsonObject result;
                         bool dispatched = false;
                         bool readOnly = true;
@@ -257,7 +281,7 @@ public sealed class ModelingSession
                             else
                             {
                                 readOnly = definition["annotations"]?["readOnlyHint"]?.GetValue<bool>() == true;
-                                if (options.Architectural && !readOnly && !Workflow.BasisConfirmed)
+                                if (options.Architectural && !readOnly && name != "openbim_export_ifc" && !Workflow.BasisConfirmed)
                                     result = Error("先确认平面和尺度，再调用 set_design_basis。当前未执行几何修改。");
                                 else if (!await approve(new ToolInvocation(name, arguments, readOnly), token))
                                 {
@@ -272,9 +296,17 @@ public sealed class ModelingSession
                                     dispatched = true;
                                     try
                                     {
-                                        result = await mcp.CallToolAsync(name, arguments, CancellationToken.None);
+                                        result = isLocal
+                                            ? (await localTools!.CallToolAsync(name, arguments, CancellationToken.None)).DeepClone().AsObject()
+                                            : await mcp.CallToolAsync(name, arguments, CancellationToken.None);
                                     }
-                                    catch (Exception error) when (error is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
+                                    catch (UnconfirmedToolException)
+                                    {
+                                        ToolCompletionUnknown = true;
+                                        throw;
+                                    }
+                                    catch (Exception error) when (error is HttpRequestException or TaskCanceledException ||
+                                        !isLocal && error is JsonException or InvalidOperationException)
                                     {
                                         ToolCompletionUnknown = true;
                                         throw new UnconfirmedToolException();
@@ -282,7 +314,11 @@ public sealed class ModelingSession
                                 }
                             }
                         }
-                        catch (JsonException) { result = Error("Tool arguments must be a valid JSON object."); }
+                        catch (JsonException error)
+                        {
+                            result = Error(dispatched && isLocal ? error.Message : "Tool arguments must be a valid JSON object.");
+                        }
+                        catch (ArgumentException error) when (dispatched && isLocal) { result = Error(error.Message); }
                         catch (InvalidOperationException error) { result = Error(error.Message); }
                         catch (McpRpcException error) { result = Error(error.Message); }
                         if (dispatched)

@@ -346,7 +346,7 @@ public sealed class MagpiePanel : Panel
                 }, token),
                 (arguments, token) => OnUiAsync(() => AskUser(arguments, token), token),
                 (role, text) => Application.Instance.AsyncInvoke(() => { if (!disposed) Append(chat, role, text); }),
-                cancellation.Token, options), cancellation.Token);
+                cancellation.Token, options, new OpenBimTools(doc)), cancellation.Token);
             if (!disposed && documentSerial == doc.RuntimeSerialNumber)
                 status.Text = chat.Session.Outcome switch
                 {
@@ -380,6 +380,90 @@ public sealed class MagpiePanel : Panel
                 unfinished.State = "paused";
             running = null;
             if (!disposed) SetBusy(false);
+            DisposeTransportsWhenIdle();
+        }
+    }
+
+    internal async Task ExportIfcAsync(string? path = null)
+    {
+        if (disposed || IsBusy) return;
+        var doc = RhinoDoc.ActiveDoc;
+        uint serial = documentSerial;
+        if (doc is null || doc.RuntimeSerialNumber != serial ||
+            !chats.TryGetValue(serial, out var chat)) return;
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        running = cancellation;
+        var message = new PanelMessage("tool", "tool", "导出 IFC 并读回验证", "running")
+        {
+            Detail = "等待选择 IFC 保存位置。",
+        };
+        chat.Messages.Add(message);
+        try
+        {
+            SetBusy(true);
+            status.Text = "请选择 IFC 保存位置";
+            PublishState();
+            if (path is null)
+            {
+                using var dialog = new SaveFileDialog
+                {
+                    Title = "导出 IFC",
+                    FileName = (string.IsNullOrWhiteSpace(doc.Name) ? "model" : Path.GetFileNameWithoutExtension(doc.Name)) + ".ifc",
+                };
+                dialog.Filters.Add(new FileFilter("IFC 模型", ".ifc"));
+                if (dialog.ShowDialog(this) != DialogResult.Ok)
+                {
+                    message.Text = "IFC 导出已取消";
+                    message.Detail = "未选择导出位置。";
+                    message.State = "paused";
+                    return;
+                }
+                path = dialog.FileName;
+            }
+            cancellation.Token.ThrowIfCancellationRequested();
+            if (RhinoDoc.ActiveDoc?.RuntimeSerialNumber != serial || documentSerial != serial)
+                throw new InvalidOperationException("活动文档已切换或关闭，请在当前文档重新导出。");
+            message.Detail = path;
+            status.Text = "IFC 导出中 · 正在读回验证…";
+            PublishState();
+            var tools = new OpenBimTools(doc);
+            var arguments = new JsonObject { ["path"] = path };
+            var result = await Task.Run(() => tools.CallToolAsync("openbim_export_ifc", arguments,
+                cancellation.Token), cancellation.Token);
+            cancellation.Token.ThrowIfCancellationRequested();
+            bool failed = result["isError"]?.GetValue<bool>() == true;
+            message.Text = failed ? "IFC 导出失败" : "IFC 导出完成";
+            message.State = failed ? "error" : "done";
+            message.Detail = string.Join("\n", result["content"]?.AsArray()
+                .Where(item => item?["type"]?.GetValue<string>() == "text")
+                .Select(item => item!["text"]?.GetValue<string>() ?? "") ?? []);
+        }
+        catch (OperationCanceledException)
+        {
+            message.Text = "IFC 导出已停止";
+            message.Detail = "尚未确认导出完成，请检查目标文件。";
+            message.State = "paused";
+        }
+        catch (Exception error)
+        {
+            message.Text = "IFC 导出失败";
+            message.Detail = FriendlyError(error);
+            message.State = "error";
+        }
+        finally
+        {
+            chat.Transcript.AppendLine(message.Text).AppendLine(message.Detail).AppendLine();
+            running = null;
+            if (!disposed)
+            {
+                if (documentSerial == serial)
+                {
+                    transcript.Text = chat.Transcript.ToString();
+                    status.Text = message.Text;
+                }
+                SetBusy(false);
+                PublishState();
+            }
             DisposeTransportsWhenIdle();
         }
     }
@@ -594,6 +678,10 @@ public sealed class MagpiePanel : Panel
         "run_csharp" => "运行 C# 建模代码",
         "run_python" => "运行 Python 建模代码",
         "get_viewport_image" => "查看当前模型",
+        "openbim_catalog" => "查询简易 BIM 参数工具",
+        "openbim_apply" => "更新平面与关联构件",
+        "openbim_inspect" => "核对实体、洞口与共享 Block",
+        "openbim_export_ifc" => "导出 IFC 并读回验证",
         "zoom_to_object" => "调整视口",
         _ => name.Replace('_', ' '),
     };
@@ -667,6 +755,10 @@ public sealed class MagpiePanel : Panel
             case "draft": prompt.Text = message["text"]?.GetValue<string>() ?? ""; break;
             case "stop": stop.PerformClick(); break;
             case "refresh": await RefreshAsync(); break;
+            case "exportIfc":
+                if (sourceDocument != documentSerial.ToString(System.Globalization.CultureInfo.InvariantCulture)) return;
+                await ExportIfcAsync();
+                break;
             case "catalog":
                 if (catalogError.Length > 0 || DateTime.UtcNow - catalogRefreshedAt > TimeSpan.FromSeconds(30))
                     await RefreshAsync();

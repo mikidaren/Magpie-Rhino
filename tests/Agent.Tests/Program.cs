@@ -266,6 +266,8 @@ finally
     if (File.Exists(preferencesTestPath)) File.Delete(preferencesTestPath);
     if (Directory.Exists(preferencesTestDirectory)) Directory.Delete(preferencesTestDirectory);
 }
+passed += IfcRuntimeTests.Run();
+passed += IfcDiagnosticTests.Run();
 Console.WriteLine($"{passed} agent checks passed");
 
 sealed class FixtureHandler : HttpMessageHandler

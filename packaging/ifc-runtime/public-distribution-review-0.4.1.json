@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 1,
+  "productVersion": "0.4.1",
+  "reviewDate": "2026-11-10",
+  "status": "blocked",
+  "publicReleaseApproved": false,
+  "report": "docs/licensing/2026-11-10-ifc-public-distribution-review.md",
+  "artifactCatalogue": "source-artifacts.json",
+  "sourceAcquisition": {
+    "verifiedArtifacts": 30,
+    "verifiedBytes": 514769086,
+    "newArtifactsThisReview": 5,
+    "newBytesThisReview": 72277695,
+    "correspondingSourceCompleteness": "qualified-and-open"
+  },
+  "reviewedPayload": {
+    "workspaceRelativeRoot": "work/offline final candidate 0.4.1/openbim/runtime",
+    "manifestSha256": "d319b422e296c5d0ab077f74a3a1e7f33a34ff5b92d1727d27cf19c52baa88a4",
+    "manifestSize": 492042,
+    "manifestFileCount": 2666,
+    "noticePrimaryComponents": 10,
+    "noticeNativeComponents": 24,
+    "noticeCatalogueStatus": "predates-rocksdb-zstd-and-other-review-corrections",
+    "requiredPackagingAction": "Regenerate notices from the actual staged payload, then regenerate its runtime manifest and final package."
+  },
+  "verification": {
+    "collectorTestsPassed": 16,
+    "stagedCollectionPrimaryComponents": 10,
+    "stagedCollectionNativeComponents": 26,
+    "stagedCollectionVerifiedLicenseTexts": 73,
+    "stagedCollectionNativeFileHashes": 147,
+    "newNoticeOutputWorkspaceRelative": "work/ifc-source-cache/public-distribution-notices-0.4.1-review",
+    "collectedPublicReleaseGate": "blocked"
+  },
+  "evidence": [
+    {
+      "id": "E01",
+      "kind": "archive-member",
+      "artifactId": "ifcopenshell",
+      "member": "IfcOpenShell-b5e509b223e1ab2c7eb4641211ea05209a2dfa3e/COPYING.LESSER",
+      "sha256": "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118",
+      "relevantLines": [79, 126],
+      "finding": "LGPLv3 section 4 defines notice, licence-copy, modification/reverse-engineering and replacement or relinking conditions."
+    },
+    {
+      "id": "E02",
+      "kind": "archive-member",
+      "artifactId": "ifcopenshell",
+      "member": "IfcOpenShell-b5e509b223e1ab2c7eb4641211ea05209a2dfa3e/COPYING",
+      "sha256": "1b3782ccad7b8614100cda30d3faf42fc39f2e97932908c543005053b654ca68",
+      "relevantLines": [123, 145, 275, 286],
+      "finding": "GPLv3 section 1 defines corresponding source and section 6(d) provides the source-download delivery route."
+    },
+    {
+      "id": "E03",
+      "kind": "archive-member",
+      "artifactId": "cgal",
+      "member": "cgal-5.5.5/Nef_3/include/CGAL/Nef_polyhedron_3.h",
+      "sha256": "6afd4ebb5565b61b82673440760ab64aa4a1ac154183b5d7dcc7ee86ebf7fc0d",
+      "relevantLines": [1, 9],
+      "finding": "The header explicitly declares GPL-3.0-or-later OR LicenseRef-Commercial."
+    },
+    {
+      "id": "E04",
+      "kind": "archive-member",
+      "artifactId": "ifcopenshell",
+      "member": "IfcOpenShell-b5e509b223e1ab2c7eb4641211ea05209a2dfa3e/src/svgfill/CMakeLists.txt",
+      "sha256": "1ab00ba369bfef29c8acfcd85608fbcc492c659ae13814317b4f6fda22098974",
+      "relevantLines": [34, 55],
+      "finding": "SVG-fill finds CGAL and links IFCOPENSHELL_CGAL and LibXml2."
+    },
+    {
+      "id": "E05",
+      "kind": "archive-member",
+      "artifactId": "opencascade",
+      "member": "OCCT-7_8_1/OCCT_LGPL_EXCEPTION.txt",
+      "sha256": "04580a884ea6cea294402649ff7b5cbb167d47462d1340a4ed33e550db10a81b",
+      "relevantLines": [1, 10],
+      "finding": "OCCT's exception permits object-code incorporation of header material under chosen terms with a prominent OCCT-use notice."
+    },
+    {
+      "id": "E06",
+      "kind": "archive-member",
+      "artifactId": "opencascade",
+      "member": "OCCT-7_8_1/LICENSE_LGPL_21.txt",
+      "sha256": "e237fa56668030e928551ddd60f05df5fe957f75eab874bbd017e085ed722e7c",
+      "relevantLines": [276, 330],
+      "finding": "LGPLv2.1 section 6 describes notices, reverse-engineering permission, shared-library or relinking options, equivalent source access and the accompanying-system-component qualification."
+    },
+    {
+      "id": "E07",
+      "kind": "archive-member",
+      "artifactId": "mpir",
+      "member": "mpir-5e0c2061af105c151970d41c8394ce956f77e455/gmp-h.in",
+      "sha256": "73cf432b61e949fe9e5168299d8a1cadbc5aaf80288deb64755c608fb49d428e",
+      "relevantLines": [9, 22],
+      "finding": "MPIR source declares LGPLv3 or later."
+    },
+    {
+      "id": "E08",
+      "kind": "archive-member",
+      "artifactId": "mpfr",
+      "member": "mpfr-9f637c103431faa235f1aad7e35b639d3aa635ee/src/mpfr.h",
+      "sha256": "22c5bd9b45bbbb5b1564bfb546bcf26120f3c901460a56231aa6bba4b380164d",
+      "relevantLines": [8, 30],
+      "finding": "The acquired candidate declares LGPLv3 or later and source version 4.1.0-dev. Its runtime correspondence remains unestablished."
+    },
+    {
+      "id": "E09",
+      "kind": "archive-member",
+      "artifactId": "ifcopenshell",
+      "member": "IfcOpenShell-b5e509b223e1ab2c7eb4641211ea05209a2dfa3e/win/build-deps.cmd",
+      "sha256": "49543f7cda2f67bfc7c22ed5bc7c90c22c293416f58fcdfed89d057ea388fe02",
+      "relevantLines": [309, 350, 640, 648],
+      "finding": "MPIR is pinned and patched; MPFR uses a mutable branch and patch; Eigen is selected as 3.3.9."
+    },
+    {
+      "id": "E10",
+      "kind": "archive-member",
+      "artifactId": "ifcopenshell",
+      "member": "IfcOpenShell-b5e509b223e1ab2c7eb4641211ea05209a2dfa3e/src/ifcgeom/CMakeLists.txt",
+      "sha256": "cdcf26828afc8de2e9fef7aac85f42e8323aa09514bb369ad5bd44c889e4fcaf",
+      "relevantLines": [44, 53],
+      "finding": "Common IfcGeom requires and links Eigen even for an OCC-only build."
+    },
+    {
+      "id": "E11",
+      "kind": "archive-member",
+      "artifactId": "eigen",
+      "member": "eigen-3.3.9/COPYING.README",
+      "sha256": "c83230b770f17ef1386ea1fd3681271dd98aa93646bdbfb5bff3a1b7050fff9d",
+      "relevantLines": [1, 18],
+      "finding": "Eigen documents its primary MPL2 licence, other modules and EIGEN_MPL2_ONLY enforcement."
+    },
+    {
+      "id": "E12",
+      "kind": "archive-member",
+      "artifactId": "rocksdb",
+      "member": "rocksdb-9.11.2/README.md",
+      "sha256": "99d85d5d88c6d853c2e6fda21de51fa33288a51d3aa4959dd2b68535f768894b",
+      "relevantLines": [27, 29],
+      "finding": "RocksDB permits selection of Apache 2.0 or GPLv2. The notice catalogue selects Apache plus original LevelDB BSD notices."
+    },
+    {
+      "id": "E13",
+      "kind": "archive-member",
+      "artifactId": "zstd",
+      "member": "zstd-1.5.7/lib/zstd.h",
+      "sha256": "9b4bc8245565c98ccfc61c07749928b57e7c0f6fddb0530c4f6aa1971893d88b",
+      "relevantLines": [1, 8, 112, 114],
+      "finding": "The library header offers BSD or GPLv2 and declares version 1.5.7."
+    },
+    {
+      "id": "E14",
+      "kind": "archive-member",
+      "artifactId": "cpython",
+      "member": "Python-3.12.13/Modules/expat/expat.h",
+      "sha256": "d20997001462356b5ce3810ebf5256c8205f58462c64f21eb9bf80f8d1822b08",
+      "relevantLines": [1083, 1085],
+      "finding": "CPython vendors Expat 2.7.4, matching the observed Windows runtime."
+    },
+    {
+      "id": "E15",
+      "kind": "archive-member",
+      "artifactId": "libffi-cpython",
+      "member": "cpython-source-deps-16fad4855b3d8c03b5910e405ff3a04395b39a98/configure.ac",
+      "sha256": "36d02f0ffdfab27bb88905e02cdd9f629b6c872e0af3a7427a8c41211d902d92",
+      "relevantLines": [5, 5],
+      "finding": "The source commit selected by the standalone Windows build declares libffi 3.4.2."
+    },
+    {
+      "id": "E16",
+      "kind": "archive-member",
+      "artifactId": "python-build-standalone",
+      "member": "python-build-standalone-f0ae464f527498d6c4b13f19977447d603cd5edd/cpython-windows/build.py",
+      "sha256": "9003d4c666878ca78da9c575c55459d07982a9da664ff26e5c9e8f27c88915ef",
+      "relevantLines": [960, 1011],
+      "finding": "build_libffi checks out 16fad4855b3d8c03b5910e405ff3a04395b39a98 and invokes the matching CPython prepare_libffi.bat."
+    },
+    {
+      "id": "E17",
+      "kind": "archive-member",
+      "artifactId": "ifcopenshell",
+      "member": "IfcOpenShell-b5e509b223e1ab2c7eb4641211ea05209a2dfa3e/cmake/CMakeLists.txt",
+      "sha256": "67b32e5aa960025102554d22c44576528909aebf0ac945ffa07dcf6b5303915a",
+      "relevantLines": [137, 145, 277, 324, 444, 449, 735, 736],
+      "finding": "Existing feature switches control CGAL, OCC, Manifold, COLLADA, glTF, RocksDB and Zstd."
+    }
+  ],
+  "primaryOnlineReferences": [
+    {"id": "W01", "url": "https://www.cgal.org/license.html", "finding": "CGAL licensing is package-specific GPL/LGPL with commercial alternatives."},
+    {"id": "W02", "url": "https://www.gnu.org/licenses/lgpl-3.0.en.html", "finding": "LGPLv3 combined-work, relinking and replacement conditions."},
+    {"id": "W03", "url": "https://www.gnu.org/licenses/gpl-faq.en.html#MustSourceBuildToMatchExactHashOfBinary", "finding": "Corresponding source concerns the actual source used. Identical binary hashes are an additional reproducibility property."},
+    {"id": "W04", "url": "https://www.gnu.org/licenses/gpl-faq.en.html#WindowsRuntimeAndGPL", "finding": "FSF distinguishes GPL program linkage to a system runtime from conveying proprietary runtime DLLs with that program."},
+    {"id": "W05", "url": "https://www.gnu.org/licenses/gpl-faq.en.html#GPLPlugins", "finding": "Function calls, shared data structures and communication semantics affect combined-work analysis."},
+    {"id": "W06", "url": "https://www.gnu.org/licenses/gpl-faq.en.html#LGPLStaticVsDynamic", "finding": "Conveying LGPL library binaries carries source-delivery obligations and static linking requires relinkable application material."},
+    {"id": "W07", "url": "https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution", "finding": "Microsoft conditions unmodified runtime distribution on applicable licensing rights and excludes debug_nonredist."},
+    {"id": "W08", "url": "https://www.gnu.org/licenses/gpl-faq.en.html#SourceAndBinaryOnDifferentSites", "finding": "GPLv3 section 6(d) requires clear source directions and continuing availability."}
+  ],
+  "plans": [
+    {
+      "id": "P1",
+      "name": "controlled-occ-only-source-build",
+      "recommendation": "preferred",
+      "status": "source-materials-acquired-build-and-release-evidence-open",
+      "cmakeFeatureIntent": {"WITH_OPENCASCADE": "ON", "WITH_CGAL": "OFF", "WITH_MANIFOLD": "OFF", "COLLADA_SUPPORT": "OFF", "GLTF_SUPPORT": "OFF", "WITH_PROJ": "OFF", "USD_SUPPORT": "OFF", "WITH_ROCKSDB": "OFF", "WITH_ZSTD": "OFF"},
+      "requiredAdditionalDefinition": "EIGEN_MPL2_ONLY",
+      "acceptance": ["Record exact sources, patches, headers, tools and build flags.", "Prove compiled/link inputs and shipped binaries exclude the disabled features.", "Preserve OCC source, exception, notices and compatible library replacement.", "Document Microsoft runtime redistribution rights.", "Retest the actual package through all supported worker and runtime entry points.", "Provide corresponding-source assets and final source coverage before release approval."]
+    },
+    {
+      "id": "P2",
+      "name": "prune-existing-binary-plugins",
+      "status": "conditional-scope-reduction",
+      "acceptance": ["Exclude both CGAL kernels and SVG-fill together.", "Treat prior two-storey exclusion probes as bounded behavioral evidence.", "Resolve remaining core/static components and original-source correspondence.", "Update fingerprint, component-presence, notice and manifest data together."]
+    },
+    {
+      "id": "P3",
+      "name": "retain-cgal-under-gpl",
+      "status": "blocked-on-combined-work-and-runtime-rights",
+      "acceptance": ["Determine and license the applicable combined-work source scope.", "Supply complete corresponding sources, modifications and any static relinking material.", "Resolve the proprietary bundled-runtime issue on its own legal basis.", "Review the actual independent-process communication boundary."]
+    },
+    {
+      "id": "P4",
+      "name": "commercial-or-additional-permission",
+      "status": "grant-absent",
+      "acceptance": ["Obtain and record an actual grant covering these binaries and deployment.", "Complete all independent LGPL, notice, source and Microsoft obligations."]
+    }
+  ],
+  "remainingGaps": [
+    {"id": "G1", "scope": "actual-native-source-correspondence", "closureEvidence": "An upstream source/modification/build account covering the retained binaries, or a controlled replacement build with recorded inputs."},
+    {"id": "G2", "scope": "cgal-and-gpl-combined-work", "closureEvidence": "A validated OCC-only exclusion/build, a completed GPL-compatible combined-work route, or an actual applicable commercial/additional grant."},
+    {"id": "G3", "scope": "mpir-mpfr-static-linking", "closureEvidence": "Exact linked revisions and patches plus usable relinking/application material, or evidence of complete exclusion from the released work."},
+    {"id": "G4", "scope": "microsoft-redistribution-and-gpl-bundling", "closureEvidence": "Applicable redistribution-rights and edition terms for the exact retained runtime binaries, together with a resolved GPL-route bundling analysis where relevant."},
+    {"id": "G5", "scope": "source-delivery-and-replacement", "closureEvidence": "Complete source assets, clear paired download directions, applicable LGPL replacement/reverse-engineering permissions and a tested compatible replacement path."},
+    {"id": "G6", "scope": "retained-transitive-components", "closureEvidence": "File-level Eigen scope, core RocksDB/compression scope, GEOS source/build accounting and documented GCC runtime-exception applicability."},
+    {"id": "G7", "scope": "final-package-notice-refresh", "closureEvidence": "Regenerated staged notices and runtime/package manifests that bind the corrected inventory, final binary set and final source-coverage index."}
+  ]
+}

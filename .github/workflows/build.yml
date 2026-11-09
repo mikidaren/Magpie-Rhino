@@ -21,13 +21,25 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - run: node --test tests/agent.test.mjs
+      - run: node --test tests/openbim-snapshot.test.mjs
+      - run: node --test tests/offline-ifc-package.test.mjs
       - run: dotnet run --project tests/Core.Tests --configuration Release
       - run: dotnet run --project tests/Agent.Tests --configuration Release
       - run: dotnet run --project tests/Workflow.Tests --configuration Release
+      - run: python -B -m unittest discover -s tests/packaging -p 'test_*.py' -v
       - if: runner.os == 'Windows'
         shell: pwsh
         run: ./tests/install.test.ps1
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tests/panel-installer-verify.test.ps1
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tests/source-provenance.test.ps1
       - run: npm pack ./Magpie-Rhino --dry-run
   browser:
     runs-on: ubuntu-24.04
@@ -47,16 +59,49 @@ jobs:
   package:
     needs: [test, browser]
     runs-on: windows-latest
+    outputs:
+      public_release_allowed: ${{ steps.policy.outputs.allowed }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned runtime build tool
+        run: python -m pip install uv==0.11.15
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ifc-source-cache
+          key: ifc-source-evidence-${{ hashFiles('packaging/ifc-runtime/source-artifacts.json') }}
+      - name: Build private offline IFC runtime
+        shell: pwsh
+        run: |
+          $env:UV_PYTHON_INSTALL_DIR = "$env:RUNNER_TEMP/ifc-build-python"
+          uv python install 3.12.13 --no-bin --no-registry
+          $python = uv python find 3.12.13 --managed-python --no-project
+          ./scripts/build-ifc-runtime.ps1 -PythonPath $python -SourceCacheDirectory "$env:RUNNER_TEMP/ifc-source-cache" -DownloadSourceEvidence -AllowBuildDownloads
       - shell: pwsh
         run: |
           Invoke-WebRequest https://files.mcneel.com/yak/tools/0.19.1/win-x64/yak.exe -OutFile "$env:RUNNER_TEMP/yak.exe"
-          ./scripts/build-panel.ps1 -YakPath "$env:RUNNER_TEMP/yak.exe"
+          ./scripts/build-panel.ps1 -YakPath "$env:RUNNER_TEMP/yak.exe" -LocalOnly
+      - name: Verify actual packaged runtime in an isolated profile
+        shell: pwsh
+        run: |
+          $package = Get-Content dist/last-package.json -Raw | ConvertFrom-Json
+          ./scripts/test-ifc-runtime.ps1 -RuntimePath "$($package.staging)/openbim/runtime" -ReportPath "$env:RUNNER_TEMP/packaged-ifc-check.json"
+      - name: Enforce public binary release review
+        id: policy
+        shell: pwsh
+        run: |
+          $package = Get-Content dist/last-package.json -Raw | ConvertFrom-Json
+          "allowed=$($package.publicReleaseAllowed.ToString().ToLower())" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          if (!$package.publicReleaseAllowed) {
+            'Local offline build passed. Public binary uploads remain gated by the native dependency licence review.' | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
       - uses: actions/upload-artifact@v4
+        if: steps.policy.outputs.allowed == 'true'
         with:
           name: Magpie-Rhino-win-x64
           path: |
@@ -71,6 +116,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Require approved dependency redistribution review
+        if: needs.package.outputs.public_release_allowed != 'true'
+        run: |
+          echo 'Public release is blocked by the IFC native dependency licence review.'
+          exit 1
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:

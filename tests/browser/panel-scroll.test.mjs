@@ -14,7 +14,8 @@ async function settle(page) {
 }
 
 async function fixture(run) {
-  const browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ["--hide-scrollbars"] });
+  const browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ["--hide-scrollbars"],
+    ...(process.env.PANEL_TEST_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PANEL_TEST_CHROMIUM_EXECUTABLE } : {}) });
   try {
     const page = await browser.newPage({ viewport: { width: 480, height: 760 } });
     await page.addInitScript(() => { window.magpiePreviewSend = () => {}; });

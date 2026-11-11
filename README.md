@@ -18,6 +18,8 @@ Magpie gateway, model groups and routing strategies.
 Rhino Magpie panel → selected Magpie model / group → tool calls → Rhino MCP → native geometry
 ```
 
+The full local build includes a [two-storey workflow](docs/architectural-loop.md) for confirming the brief, reviewing candidates, applying native geometry, and verifying the current revision.
+
 The panel supports separate conversations per document, model and group selection,
 tool approvals, cancellation, and viewport image feedback. Magpie owns model
 routing and provider accounts. Rhino's installed AI plugin supplies the MCP tools.

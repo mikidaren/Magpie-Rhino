@@ -268,6 +268,10 @@ finally
 }
 passed += IfcRuntimeTests.Run();
 passed += IfcDiagnosticTests.Run();
+if (args.Length == 4 && args[0] == "--plan-review-runtime")
+    passed += await PlanReviewWorkerTests.RunAsync(args[1], args[2], args[3]);
+if (args.Length == 3 && args[0] == "--layout-runtime")
+    passed += await LayoutWorkerTests.RunAsync(args[1], args[2]);
 Console.WriteLine($"{passed} agent checks passed");
 
 sealed class FixtureHandler : HttpMessageHandler

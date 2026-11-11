@@ -3,10 +3,12 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>0.4.1</Version>
+    <Version>0.4.2</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../RhinoMagpie/BridgeConfig.cs" Link="BridgeConfig.cs" />
+    <EmbeddedResource Include="Resources/miki_plan_review.py" LogicalName="RhinoMagpie.Agent.Resources.miki_plan_review.py" />
+    <EmbeddedResource Include="Resources/layout_baseline.py" LogicalName="RhinoMagpie.Agent.Resources.layout_baseline.py" Condition="Exists('Resources/layout_baseline.py')" />
   </ItemGroup>
 </Project>

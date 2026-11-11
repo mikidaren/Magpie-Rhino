@@ -15,6 +15,7 @@ public sealed class ModelingSession
     public bool ToolCompletionUnknown { get; private set; }
     public ProjectWorkflow Workflow { get; } = new();
     public string Outcome { get; private set; } = "idle";
+    public ModelingRunMetrics? LastRunMetrics { get; private set; }
 
     private const string Instructions = """
         You are Magpie, an AI modeling assistant working inside Rhino.
@@ -86,12 +87,24 @@ public sealed class ModelingSession
         ILocalModelingTools? localTools = null)
     {
         if (!await gate.WaitAsync(0, token)) throw new InvalidOperationException("当前会话仍在运行。");
+        ModelingRunMeter? meter = options?.MeasureRun == true ? new() : null;
+        LastRunMetrics = null;
+        async Task<bool> ApproveAsync(ToolInvocation invocation)
+        {
+            if (meter is not null) meter.ApprovalChecks++;
+            bool granted = await approve(invocation, token);
+            if (!granted && meter is not null) meter.DeclinedApprovals++;
+            return granted;
+        }
         try
         {
             if (ToolCompletionUnknown) throw new UnconfirmedToolException();
             options ??= new ModelingRunOptions();
             Outcome = "running";
             Workflow.BeginRun(options.Units);
+            var reviewTools = localTools as IPlanReviewTools;
+            if (reviewTools is not null)
+                Workflow.SetPlanReview(await reviewTools.ReadPlanReviewAsync(verifyNative: true, token));
             await mcp.InitializeAsync(token);
             var definitions = new Dictionary<string, JsonObject>(StringComparer.Ordinal);
             foreach (var definition in (await mcp.ListToolsAsync(token)).OfType<JsonObject>()
@@ -112,6 +125,7 @@ public sealed class ModelingSession
                         !name.StartsWith("openbim_", StringComparison.Ordinal) || name.Length == "openbim_".Length ||
                         definition["inputSchema"] is not JsonObject)
                         throw new InvalidOperationException("Local tools require an openbim_ name and an MCP inputSchema object.");
+                    if (reviewTools is not null && !options.Architectural && IsManagedBimWrite(name)) continue;
                     if (!definitions.TryAdd(name, definition.DeepClone().AsObject()))
                         throw new InvalidOperationException("Duplicate or reserved tool name: " + name);
                     localNames.Add(name);
@@ -139,7 +153,8 @@ public sealed class ModelingSession
                     ["role"] = "system",
                     ["content"] = "Current Rhino document facts. Preserve actual units and use these scale conversions:\n" +
                         options.DocumentContext + "\nArchitectural mode: " + options.Architectural +
-                        ". Target detail: " + options.Detail + ". References are user-selected data.",
+                        ". Target detail: " + options.Detail + ". References are user-selected data." +
+                        (reviewTools is null ? "" : " For a managed OpenBIM project, confirm a plan brief (only supplied area targets and transit spaces), run openbim_plan_review after edits, and fix its issues before marking the plan complete. For an empty document and a supported two-storey brief, stage openbim_layout_candidate and apply the candidateId only after approval."),
                 });
             messages.Add(new JsonObject { ["role"] = "user", ["content"] = prompt });
             if (options.References is { Count: > 0 })
@@ -168,8 +183,23 @@ public sealed class ModelingSession
             {
                 token.ThrowIfCancellationRequested();
                 report("assistant_start", "");
-                var message = await gateway.CompleteAsync(config, messages, tools, token,
-                    delta => report("assistant_delta", delta));
+                var requestMessages = options.CompactContext ? ModelingContextProjection.Project(messages) : messages;
+                long callStarted = meter?.StartCall(requestMessages, tools) ?? 0;
+                ChatUsage? usage = null;
+                bool returned = false;
+                JsonObject message;
+                try
+                {
+                    message = await gateway.CompleteAsync(config, requestMessages, tools, token,
+                        delta =>
+                        {
+                            meter?.SeeText(delta);
+                            report("assistant_delta", delta);
+                        },
+                        onUsage: meter is null ? null : value => usage = value, requestUsage: meter is not null);
+                    returned = true;
+                }
+                finally { meter?.FinishCall(callStarted, returned, usage); }
                 string? text = message["content"]?.GetValue<string>();
                 report("Magpie", text ?? "");
                 var calls = message["tool_calls"] as JsonArray;
@@ -189,6 +219,7 @@ public sealed class ModelingSession
                             ["role"] = "user",
                             ["content"] = Workflow.ContinuationPrompt(),
                         });
+                        if (meter is not null) meter.RepairReminders++;
                         report("诊断", "上一项操作未通过，继续修正并验证。");
                         continue;
                     }
@@ -196,6 +227,8 @@ public sealed class ModelingSession
                     {
                         try
                         {
+                            if (reviewTools is not null)
+                                Workflow.SetPlanReview(await reviewTools.ReadPlanReviewAsync(verifyNative: true, token));
                             Workflow.RequestReview();
                             Outcome = "needs_review";
                             report("计划", Workflow.Snapshot().ToJsonString());
@@ -211,6 +244,7 @@ public sealed class ModelingSession
                                 return;
                             }
                             messages.Add(new JsonObject { ["role"] = "user", ["content"] = Workflow.ContinuationPrompt() });
+                            if (meter is not null) meter.ContinuationReminders++;
                             report("状态", "当前计划仍有待办，继续处理下一项。");
                             continue;
                         }
@@ -261,7 +295,7 @@ public sealed class ModelingSession
                                     if (arguments["source"]?.GetValue<string>() == "confirmed_assumption" &&
                                         !Workflow.IsBasisApproved(note))
                                     {
-                                        declined = !await approve(new ToolInvocation("confirm_design_basis", arguments, false), token);
+                                        declined = !await ApproveAsync(new ToolInvocation("confirm_design_basis", arguments, false));
                                         if (!declined) Workflow.RecordBasisApproval(note);
                                     }
                                     if (!declined) Workflow.SetBasis(arguments, options);
@@ -275,15 +309,19 @@ public sealed class ModelingSession
                                 result = Error("This tool is unavailable.");
                             else if (name == "ask_user")
                             {
+                                if (meter is not null) meter.UserQuestions++;
                                 result = Text(await askUser(arguments, token));
                                 token.ThrowIfCancellationRequested();
                             }
                             else
                             {
                                 readOnly = definition["annotations"]?["readOnlyHint"]?.GetValue<bool>() == true;
-                                if (options.Architectural && !readOnly && name != "openbim_export_ifc" && !Workflow.BasisConfirmed)
+                                if (reviewTools is not null && !options.Architectural &&
+                                    (IsManagedBimWrite(name) || Workflow.RequiresPlanReview && ProjectWorkflow.IsModifyingTool(name, readOnly)))
+                                    result = Error("受管建筑项目的写入必须使用建筑模式，以保留尺度和版本验收。普通 Rhino 读取仍可使用。");
+                                else if (options.Architectural && !readOnly && name != "openbim_export_ifc" && !Workflow.BasisConfirmed)
                                     result = Error("先确认平面和尺度，再调用 set_design_basis。当前未执行几何修改。");
-                                else if (!await approve(new ToolInvocation(name, arguments, readOnly), token))
+                                else if (!await ApproveAsync(new ToolInvocation(name, arguments, readOnly)))
                                 {
                                     result = Error("The user declined this tool. Stop and ask for revised instructions.");
                                     declined = true;
@@ -294,18 +332,20 @@ public sealed class ModelingSession
                                     report("工具", name);
                                     report("tool_input", arguments.ToJsonString());
                                     dispatched = true;
+                                    if (meter is not null) meter.ToolDispatches++;
                                     try
                                     {
                                         result = isLocal
-                                            ? (await localTools!.CallToolAsync(name, arguments, CancellationToken.None)).DeepClone().AsObject()
-                                            : await mcp.CallToolAsync(name, arguments, CancellationToken.None);
+                                            ? (await localTools!.CallToolAsync(name, arguments, readOnly ? token : CancellationToken.None)).DeepClone().AsObject()
+                                            : await mcp.CallToolAsync(name, arguments, readOnly ? token : CancellationToken.None);
                                     }
                                     catch (UnconfirmedToolException)
                                     {
                                         ToolCompletionUnknown = true;
                                         throw;
                                     }
-                                    catch (Exception error) when (error is HttpRequestException or TaskCanceledException ||
+                                    catch (OperationCanceledException) when (readOnly && token.IsCancellationRequested) { throw; }
+                                    catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException ||
                                         !isLocal && error is JsonException or InvalidOperationException)
                                     {
                                         ToolCompletionUnknown = true;
@@ -324,7 +364,14 @@ public sealed class ModelingSession
                         if (dispatched)
                         {
                             bool success = result["isError"]?.GetValue<bool>() != true;
+                            if (!success && meter is not null) meter.ToolErrors++;
                             string operationId = Workflow.ObserveTool(name, readOnly, success);
+                            if (reviewTools is not null && isLocal && name is
+                                "openbim_apply" or "openbim_apply_layout" or "openbim_set_plan_brief" or "openbim_plan_review")
+                            {
+                                Workflow.SetPlanReview(await reviewTools.ReadPlanReviewAsync(verifyNative: true, token));
+                                report("计划", Workflow.Snapshot().ToJsonString());
+                            }
                             result["content"]!.AsArray().Insert(0, new JsonObject
                             {
                                 ["type"] = "text",
@@ -380,6 +427,7 @@ public sealed class ModelingSession
         finally
         {
             if (Outcome == "running") Outcome = "paused";
+            LastRunMetrics = meter?.Snapshot(Outcome);
             gate.Release();
         }
     }
@@ -387,6 +435,9 @@ public sealed class ModelingSession
     public static bool IsAllowedTool(string name) =>
         !name.StartsWith("_", StringComparison.Ordinal) &&
         name is not ("close_doc" or "open_doc" or "manage_plugin_commands");
+
+    private static bool IsManagedBimWrite(string name) =>
+        name is "openbim_apply" or "openbim_apply_layout" or "openbim_set_plan_brief";
 
     private void AddToolResult(string id, JsonObject result, List<JsonObject>? imageMessages = null)
     {

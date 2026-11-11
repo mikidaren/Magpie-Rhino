@@ -1,13 +1,13 @@
 # Magpie-Rhino
 
-The local 0.4.1 candidate includes a private offline IFC runtime and lightweight OpenBIM tools.
+The local 0.4.2 candidate includes a private offline IFC runtime, lightweight OpenBIM tools and verified two-storey layout workflows.
 It retains editable exact curves, NURBS-compatible surfaces and native solids.
 Magpie appears directly in Rhino's native AI agent menu.
 
-**Public binary availability:** the latest published Release is 0.3.4. The 0.4.1
+**Public binary availability:** the latest published Release is 0.3.4. The 0.4.2
 source in this branch is under development; its full offline IFC binary is not yet
 published while third-party source and redistribution details are reviewed.
-The 0.3.4 download does not contain the 0.4.1 OpenBIM and offline IFC features.
+The 0.3.4 download does not contain OpenBIM and offline IFC features.
 
 ![Magpie in the native Rhino AI agent menu](docs/native-ai-menu.png)
 
@@ -17,6 +17,8 @@ Magpie gateway, model groups and routing strategies.
 ```text
 Rhino Magpie panel → selected Magpie model / group → tool calls → Rhino MCP → native geometry
 ```
+
+The full local build includes a [two-storey workflow](docs/architectural-loop.md) for confirming the brief, reviewing candidates, applying native geometry, and verifying the current revision.
 
 The panel supports separate conversations per document, model and group selection,
 tool approvals, cancellation, and viewport image feedback. Magpie owns model
@@ -55,7 +57,7 @@ Rhino 中仍然是精确曲线和 Brep 实体；同型门窗使用真实共享 B
 
 ### 内置离线 IFC
 
-完整 0.4.1 包自带私有 CPython 3.12.13、IfcOpenShell 0.9.0.post1 和固定依赖。
+完整 0.4.2 包自带私有 CPython 3.12.13、IfcOpenShell 0.9.0.post1 和固定依赖。
 用户无需安装 Python、运行 pip 或配置路径。解释器不加载进 Rhino，而是在独立后台进程中执行。
 插件只解析自身 `openbim/runtime`，不会回退到系统 Python、开发环境或旧连接配置。
 启动使用隔离模式，禁止用户模块路径、site 初始化和字节码写入，不继承模型服务的环境凭据。

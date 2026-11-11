@@ -873,7 +873,190 @@ await ReviewRegression("verbose native results preserve ledger metadata", async 
 if (reviewFailures.Count > 0)
     throw new AggregateException("Review regressions failed.", reviewFailures);
 passed += await LocalToolTests.RunAsync(config);
+passed += await ChatUsageTests.RunAsync(config);
+passed += ModelingContextProjectionTests.Run();
+{
+    var managed = new ProjectWorkflow();
+    managed.BeginRun("Meters");
+    managed.SetBasis(new JsonObject { ["source"] = "user_dimensions", ["note"] = "12 m × 8 m" }, scaled);
+    JsonObject Plan(string status) => JsonNode.Parse($$"""
+        {"goal":"Verify the plan","steps":[{"id":"plan","title":"Plan","acceptance":"Routes and areas","status":"{{status}}"}]}
+        """)!.AsObject();
+    managed.UpdatePlan(Plan("in_progress"));
+    managed.SetPlanReview(new JsonObject { ["status"] = "pending", ["revision"] = 0 });
+    managed.ObserveTool("get_context", true, true);
+    Reject(() => managed.UpdatePlan(Plan("complete")), "generic readback cannot finish a managed project without plan evidence");
+    managed.SetPlanReview(new JsonObject { ["status"] = "failed", ["revision"] = 0 });
+    Reject(managed.RequestReview, "failed plan review never grants acceptance");
+    managed.SetPlanReview(new JsonObject { ["status"] = "passed", ["revision"] = 0 });
+    managed.ObserveTool("openbim_plan_review", true, true);
+    managed.UpdatePlan(Plan("complete"));
+    managed.RequestReview();
+    managed.Accept();
+    Check(managed.Accepted, "current passing plan evidence and human acceptance can close the managed workflow");
+    managed.ObserveTool("openbim_apply", false, true);
+    managed.ObserveTool("get_context", true, true);
+    Reject(managed.RequestReview, "after an edit a generic readback does not resurrect prior plan evidence");
+    Check(!managed.Accepted && managed.Snapshot()["planReview"]?["status"]?.GetValue<string>() == "stale",
+        "edit invalidates visible managed acceptance and flags evidence as stale");
+    managed.SetPlanReview(new JsonObject { ["status"] = "unavailable" });
+    Reject(managed.RequestReview, "missing plan runtime fails closed for a managed project");
+    managed.SetPlanReview(null);
+    Reject(managed.RequestReview, "undoing an entire building cannot reuse its previous plan completion");
+    Check(!managed.RequiresPlanReview && managed.HasPending, "an actually empty document can return to ordinary CAD");
+    var restored = new ProjectWorkflow();
+    restored.RestoreCheckpoint(managed.ExportCheckpoint());
+    Check(restored.Goal == managed.Goal && restored.Basis == managed.Basis && restored.HasPending &&
+        !restored.BasisConfirmed && !restored.Accepted && !restored.AwaitingReview,
+        "reopening restores the task and basis notes but requires fresh evidence and scale confirmation");
+    Reject(restored.RequestReview, "restored notes cannot replay human acceptance");
+    var longPlan = Plan("pending");
+    longPlan["steps"]![0]!["acceptance"] = new string('a', 2048);
+    var lengths = new ProjectWorkflow();
+    lengths.UpdatePlan(longPlan);
+    var lengthReplay = new ProjectWorkflow();
+    lengthReplay.RestoreCheckpoint(lengths.ExportCheckpoint());
+    Check(lengthReplay.Steps.Single().Acceptance.Length == 2048, "valid boundary-length checkpoint round-trips");
+    longPlan["steps"]![0]!["acceptance"] = new string('a', 2049);
+    Reject(() => new ProjectWorkflow().UpdatePlan(longPlan), "unrestorable checkpoint length is rejected at entry");
+}
+
+using (var directFixture = new HttpFixture((turn, _) => Wire.Response(turn == 0
+    ? Wire.Calls(Wire.Call("apply", "openbim_apply", new JsonObject()),
+        Wire.Call("apply-layout", "openbim_apply_layout", new JsonObject()),
+        Wire.Call("generic", "run_csharp", new JsonObject { ["script"] = "unapproved write" }),
+        Wire.Call("read", "get_context", new JsonObject()))
+    : Wire.Text("Inspected."))))
+using (var directHttp = new HttpClient(directFixture))
+{
+    var managedTools = new ManagedFixtureTools(managed: true);
+    var session = new ModelingSession();
+    await session.RunAsync("Inspect", config, new MagpieGateway(directHttp),
+        new RhinoMcpClient(directHttp, HttpFixture.McpEndpoint), (_, _) => Task.FromResult(true),
+        (_, _) => Task.FromResult(""), (_, _) => { }, CancellationToken.None, localTools: managedTools);
+    Check(managedTools.Called.Count == 0 && directFixture.Executed.Select(x => x.Name).SequenceEqual(["get_context"]),
+        "direct CAD mode cannot dispatch local or generic writes against a managed building");
+}
+using (var deniedFixture = new HttpFixture((_, _) => Wire.Response(Wire.Calls(
+    Wire.Call("basis", "set_design_basis", Wire.Basis("user_dimensions")),
+    Wire.Call("apply-layout", "openbim_apply_layout", new JsonObject()),
+    Wire.Call("bypass", "openbim_apply", new JsonObject())))))
+using (var deniedHttp = new HttpClient(deniedFixture))
+{
+    var managedTools = new ManagedFixtureTools(managed: false);
+    var session = new ModelingSession();
+    await session.RunAsync("Build", config, new MagpieGateway(deniedHttp),
+        new RhinoMcpClient(deniedHttp, HttpFixture.McpEndpoint), (call, _) => Task.FromResult(call.Name != "openbim_apply_layout"),
+        (_, _) => Task.FromResult(""), (_, _) => { }, CancellationToken.None, scaled, managedTools);
+    Check(session.Outcome == "paused" && managedTools.Called.Count == 0,
+        "declined candidate cannot fall through to a later raw apply in the same batch");
+}
+using (var loopFixture = new HttpFixture((turn, _) => Wire.Response(turn switch
+{
+    0 => Wire.Calls(Wire.Call("basis", "set_design_basis", Wire.Basis("user_dimensions")),
+        Wire.Call("plan", "update_project_plan", Wire.Plan("in_progress")),
+        Wire.Call("candidate", "openbim_layout_candidate", new JsonObject())),
+    1 => Wire.Calls(Wire.Call("apply", "openbim_apply_layout", new JsonObject { ["candidateId"] = "test-draft" }),
+        Wire.Call("inspect", "get_context", new JsonObject()),
+        Wire.Call("premature", "update_project_plan", Wire.Plan("complete"))),
+    2 => Wire.Calls(Wire.Call("verify", "openbim_plan_review", new JsonObject { ["expectedRevision"] = 0 }),
+        Wire.Call("complete", "update_project_plan", Wire.Plan("complete"))),
+    _ => Wire.Text("Current plan checked; awaiting review."),
+})))
+using (var loopHttp = new HttpClient(loopFixture))
+{
+    var pipeline = new ManagedFixtureTools(managed: false, simulatePipeline: true);
+    var session = new ModelingSession();
+    await session.RunAsync("Model a two-storey brief", config, new MagpieGateway(loopHttp),
+        new RhinoMcpClient(loopHttp, HttpFixture.McpEndpoint), (_, _) => Task.FromResult(true),
+        (_, _) => Task.FromResult(""), (_, _) => { }, CancellationToken.None, scaled, pipeline);
+    Check(pipeline.Called.SequenceEqual(["openbim_layout_candidate", "openbim_apply_layout", "openbim_plan_review"]) &&
+        Wire.ToolResult(loopFixture.ChatRequests[2], "premature").Contains("平面尚未通过") &&
+        session.Outcome == "needs_review" && !session.Workflow.Accepted,
+        "streamed candidate workflow needs trusted native plan evidence before human review");
+}
+
+string WithUsage(string response) => response.Replace("data: [DONE]",
+    "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":19,\"completion_tokens\":2,\"prompt_tokens_details\":{\"cached_tokens\":1}}}\r\n\r\ndata: [DONE]");
+
+using (var metered = new HttpFixture((turn, _) => Wire.Response(turn == 0
+    ? WithUsage(Wire.Calls(Wire.Call("inspect", "get_context", new JsonObject())))
+    : Wire.Text("Inspected"))))
+using (var meteredHttp = new HttpClient(metered))
+{
+    var session = new ModelingSession();
+    await session.RunAsync("Inspect", config, new MagpieGateway(meteredHttp),
+        new RhinoMcpClient(meteredHttp, HttpFixture.McpEndpoint), (_, _) => Task.FromResult(true),
+        (_, _) => Task.FromResult(""), (_, _) => { }, CancellationToken.None, new(MeasureRun: true));
+    Check(session.LastRunMetrics is { ModelCalls: 2, ModelResponses: 2, CallsWithUsage: 1,
+        CallsWithoutUsage: 1, InputTokens: null, OutputTokens: null, CachedInputTokens: null,
+        ObservedInputTokens: 19, ObservedOutputTokens: 2, ToolDispatches: 1,
+        ToolErrors: 0, MeteringTimeMs: >= 0, FirstTextMs: not null, Outcome: "complete" },
+        "meter retains observed usage but cannot claim complete totals for a partially measured run");
+}
+
+async Task<ModelingRunMetrics> ReplayRepeatedViews(bool compact)
+{
+    const int views = 6;
+    using var fixture = new HttpFixture((turn, _) => Wire.Response(WithUsage(turn < views
+        ? Wire.Calls(Wire.Call($"view-{turn}", "get_viewport_image", new JsonObject()))
+        : Wire.Text("Inspected"))));
+    fixture.ExtraTools.Add(new JsonObject
+    {
+        ["name"] = "get_viewport_image", ["description"] = "capture the viewport",
+        ["inputSchema"] = new JsonObject { ["type"] = "object" },
+        ["annotations"] = new JsonObject { ["readOnlyHint"] = true },
+    });
+    fixture.ToolResult = _ => new JsonObject
+    {
+        ["content"] = new JsonArray(new JsonObject
+        {
+            ["type"] = "image", ["mimeType"] = "image/png", ["data"] = new string('A', 8192),
+        }),
+    };
+    using var http = new HttpClient(fixture);
+    var session = new ModelingSession();
+    await session.RunAsync("Inspect repeatedly", config, new MagpieGateway(http),
+        new RhinoMcpClient(http, HttpFixture.McpEndpoint), (_, _) => Task.FromResult(true),
+        (_, _) => Task.FromResult(""), (_, _) => { }, CancellationToken.None,
+        new(MeasureRun: true, CompactContext: compact));
+    return session.LastRunMetrics ?? throw new Exception("Replay did not produce metrics");
+}
+
+var fullReplay = await ReplayRepeatedViews(false);
+var compactReplay = await ReplayRepeatedViews(true);
+Check(fullReplay is { ModelCalls: 7, ToolDispatches: 6, CallsWithUsage: 7, InputTokens: 133, OutputTokens: 14,
+    CachedInputTokens: 7, Outcome: "complete" } &&
+    compactReplay.ModelCalls == fullReplay.ModelCalls && compactReplay.ToolDispatches == fullReplay.ToolDispatches &&
+    compactReplay.ToolSchemaJsonBytes == fullReplay.ToolSchemaJsonBytes && compactReplay.Outcome == fullReplay.Outcome &&
+    compactReplay.MessageJsonBytes < fullReplay.MessageJsonBytes,
+    $"same replay execution with fewer message JSON bytes: {fullReplay.MessageJsonBytes} -> {compactReplay.MessageJsonBytes}");
+
 Console.WriteLine($"{passed} workflow checks passed");
+
+sealed class ManagedFixtureTools(bool managed, bool simulatePipeline = false) : ILocalModelingTools, IPlanReviewTools
+{
+    public List<string> Called { get; } = [];
+    private string? status = managed ? "pending" : null;
+    public JsonArray ListTools() => new(new[] { "openbim_apply", "openbim_apply_layout", "openbim_layout_candidate", "openbim_plan_review" }.Select(name => (JsonNode)new JsonObject
+    {
+        ["name"] = name, ["description"] = "managed write", ["inputSchema"] = new JsonObject { ["type"] = "object" },
+        ["annotations"] = new JsonObject { ["readOnlyHint"] = name is "openbim_layout_candidate" or "openbim_plan_review" },
+    }).ToArray());
+    public Task<JsonObject> CallToolAsync(string name, JsonObject arguments, CancellationToken token)
+    {
+        Called.Add(name);
+        if (simulatePipeline)
+        {
+            if (name == "openbim_apply_layout") status = "pending";
+            if (name == "openbim_plan_review") status = "passed";
+            return Task.FromResult(Wire.Result("local call completed"));
+        }
+        return Task.FromResult(Wire.Result("unexpected write"));
+    }
+    public Task<JsonObject?> ReadPlanReviewAsync(bool verifyNative, CancellationToken token) =>
+        Task.FromResult<JsonObject?>(status is not null ? new JsonObject { ["status"] = status } : null);
+}
 
 static class Wire
 {
